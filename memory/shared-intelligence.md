@@ -1,0 +1,40 @@
+# Shared intelligence
+
+knowledge_version: 0.1.0
+page_schema: 1.0
+
+<!-- Maintained by distill/shared_updater. Contains no tenant-identifying data. -->
+
+## Taxonomy & version
+
+| Family | Weakness classes |
+|---|---|
+| `object_access` | `idor`, `bola` |
+| `authorization` | `missing_authz` |
+| `auth_abuse` | `missing_rate_limit`, `weak_reset_flow` |
+| `server_side_request` | `ssrf` |
+| `input_handling` | `injection`, `output_encoding`, `path_traversal` |
+
+Active items are `### <id>` headings. Pending, quarantined and retired items are
+`#### <id>` so the attack planner never reads them as live lessons.
+
+## Generalized attack patterns & preconditions
+
+
+## Reusable synthetic scenarios
+
+
+## Invariants & defensive patterns
+
+
+## Verified mitigation & regression guidance
+
+
+## Deprecated & superseded knowledge
+
+
+## Change log
+
+- 0.1.0: corpus created (empty).
+
+## Pending contributions
