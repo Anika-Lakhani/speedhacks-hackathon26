@@ -1,6 +1,7 @@
 """Fixture-backed stand-ins so A builds and tests before B is live (spec §7)."""
 
 import json
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -15,7 +16,9 @@ EVIDENCE_HEADER = "X-SwarmShield-Evidence"
 
 
 class FakeSite:
-    """Honors a flag dict; marked probes get the scenario's vulnerable or secure signal."""
+    """Honors a flag dict. Routes and their vulnerable/secure responses come from the
+    *curated* scenarios only, keyed by endpoint, so a generated scenario that hits a real
+    route is judged against the route's actual response, not an echo of its own guess."""
 
     def __init__(
         self,
@@ -32,7 +35,11 @@ class FakeSite:
         self.flags = dict(flags or {})
         self.signal_override: dict[str, bool] = {}  # scenario_id -> force vulnerable signal
         self.evidence_sink = evidence_sink
-        self._scenarios = {s.id: s for s in catalog.values() if s.customer_id == customer_id}
+        self._routes = [
+            (re.compile("^" + re.sub(r"\\\{\w+\\\}", "[^/]+", re.escape(s.probe.path)) + "$"), s)
+            for s in sorted(catalog.values(), key=lambda x: x.id)
+            if s.customer_id == customer_id and s.origin == "curated"
+        ]
         self.calls: list[tuple[str, str]] = []
 
     def meta(self) -> dict[str, Any]:
@@ -55,11 +62,14 @@ class FakeSite:
         json: dict[str, str] | None = None,
     ) -> SiteResponse:
         self.calls.append((method, path))
-        scenario = self._scenarios.get(headers.get(PROBE_HEADER, ""))
-        if scenario is None:
+        marker = headers.get(PROBE_HEADER)
+        route = next((s for rx, s in self._routes if rx.match(path)), None)
+        if not marker or route is None:
             return SiteResponse(status=404, body={"error": "not_found"})
-        sig = scenario.expected_signal
-        vulnerable = self.signal_override.get(scenario.id, self.flags.get(scenario.flag, False))
+        if route.probe.method != method:
+            return SiteResponse(status=405, body={"error": "method_not_allowed"})
+        scenario, sig = route, route.expected_signal
+        vulnerable = self.signal_override.get(marker, self.flags.get(scenario.flag, False))
         if vulnerable:
             status = sig.status or 200
             body: dict[str, Any] = {"simulated": True, "echo": list(sig.body_contains)}

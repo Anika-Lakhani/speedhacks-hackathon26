@@ -8,6 +8,7 @@ class ScenarioBrief(BaseModel):
     severity: str
     invariant: str
     path: str
+    origin: str = "curated"  # generated = drafted this cycle, no run history yet
 
 
 class SharedLesson(BaseModel):
@@ -22,6 +23,7 @@ class PlanRequest(BaseModel):
     customer_sections: dict[str, str] = {}  # customer-X.md §2/§3/§4/§7/§9, by heading
     diff_summary: str = ""
     changed_surfaces: list[str] = []
+    recent_events: list[dict] = []  # summarised Keewano slice, newest last
     shared_lessons: list[SharedLesson] = []
     scenarios: list[ScenarioBrief]
 

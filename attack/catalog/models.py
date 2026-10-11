@@ -1,5 +1,5 @@
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -52,3 +52,7 @@ class Scenario(BaseModel):
     probe: Probe
     expected_signal: ExpectedSignal
     severity: Severity
+    # Generated scenarios are LLM-drafted data that passed code-side validation; provenance
+    # records which model/prompt/run produced them and why.
+    origin: Literal["curated", "generated"] = "curated"
+    provenance: dict[str, Any] | None = None

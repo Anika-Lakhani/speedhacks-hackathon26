@@ -25,3 +25,7 @@ class RunConfig(BaseModel):
     auto_approve: bool = False  # demo flag: release the gate immediately
     diff_summary: str = ""
     changed_surfaces: list[str] = []
+    # Scenario generation: 0 disables it. code_context is path -> source, read by the caller.
+    generate_max: int = 0
+    code_context: dict[str, str] = {}
+    event_limit: int = 40

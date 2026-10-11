@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-DEFAULT_QUEUE_PATH = Path(".swarmshield") / "approvals.json"
+DEFAULT_QUEUE_PATH = Path(".data") / "swarmshield" / "approvals.json"  # .data/ is gitignored
 
 
 class PendingApproval(BaseModel):

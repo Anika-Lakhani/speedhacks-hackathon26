@@ -27,7 +27,9 @@ Control flow of one run:
 
 ## 1. Scenario catalog (`attack/catalog/`)
 
-A scenario is **data the model reads, never code the model executes.** One YAML file per
+A scenario is **data the model reads, never code the model executes** (a scenario may be
+hand-written or LLM-drafted; see §2b — either way it is validated data, run by the same
+deterministic engine). One YAML file per
 customer under `attack/catalog/scenarios/` (e.g. `customer-a.yaml`), each a list of:
 
 ```yaml
@@ -126,6 +128,78 @@ change-recency (scenarios touching changed surfaces first) · novelty · known h
 exploit), and supplies the catalog entries as data. The user turn carries the `PlanRequest`
 context. Keep the prompt in `agent/prompts.py` so it's reviewable and versionable; stamp a
 `prompt_version` onto the `swarm.plan` event for reproducibility.
+
+---
+
+## 2b. Scenario generation (`attack/catalog/generation.py`, `attack/agent/generator.py`)
+
+The planner (§2) only *orders* scenarios that already exist. Generation lets the LLM also
+*design new ones* from code, events and memory, so coverage is not capped by what a human
+pre-wrote. The model still never sends traffic or writes an exploit: it drafts **data**, and
+code decides what that data is allowed to become.
+
+```
+code + diff + events + customer-X.md + lessons ──► GeminiGenerator ──► [ScenarioDraft]
+                                                                           │ validate_drafts (code)
+                                          accepted → Scenario(origin="generated", SCN-GEN-nnn)
+                                          rejected → reason logged on swarm.plan
+                                                                           │
+                                   planner ranks curated + generated ──► engine ──► verifier
+                                                                           │
+                              GeneratedStore (pending) ──► human `promote` ──► permanent catalog
+```
+
+**Input** (`GenerationRequest`): objective, `max_new`, memory sections, diff summary, changed
+surfaces, **code** (`--code PATH…`; redacted of credentials, ≤6k chars/file, ≤20k total),
+recent Keewano events (summarised, newest 40), shared lessons, the customer's flags with their
+endpoints, **all existing scenarios** (to avoid duplicates), fixture names, the value rules.
+
+**Output** (`GenerationOutput`, schema-constrained, unknown fields rejected): a list of
+`ScenarioDraft` = title, weakness_class, invariant, flag, probe{method, path, params as
+`[{name, value}]` pairs}, expected_signal{status, body_contains, header_absent,
+owner_is_other}, severity, rationale. The draft has **no id and no customer_id**; params are a
+list of pairs because Gemini drops the value type of a free-form map and would emit `{}`.
+
+**Enforced in code (`validate_drafts`), not the prompt** — a draft failing any rule is
+rejected with a reason and never reaches the engine:
+- `flag` exists in the registry **for this customer**; `path` is an endpoint of **that flag**.
+- Method is GET or POST; path charset is restricted and may not contain `..`.
+- Param **values** are either `fixture:<known name>` or an inert marker: must start with
+  `SWARMSHIELD`, ≤60 chars, charset `[A-Za-z0-9_\-.:/'<>=%]` (no whitespace, `;`, `|`, `&`,
+  `$`, backticks) and may not contain payload-like tokens (`/etc/`, `passwd`, `onerror`,
+  `javascript:`, `union`, `select`, `sleep`, `--`, …; `HOSTILE_TOKENS`). **Path placeholder
+  values must be fixtures.** ≤6 params, snake_case names.
+- `expected_signal` is bounded (≤5 `body_contains` of ≤64 chars, ≤3 `header_absent`) and
+  must state a status.
+- Not a duplicate (flag, method, normalised path, params) of any existing, stored or
+  same-batch scenario; at most `max_new` accepted.
+- The **code assigns the ID** (`SCN-GEN-nnn`), sets `origin="generated"`, and records
+  provenance (model, prompt version, run, rationale).
+
+**Why a wrong guess is safe and visible.** `expected_signal` is the model's *inference*
+about what a vulnerable response looks like. The verifier still compares the real response
+with the flag ground truth (§4), so a bad guess surfaces as `inconclusive` ("probe did not
+trigger a weakness the flag says is present") and a good one as `confirmed`. `FakeSite`
+answers by **route** (built from curated scenarios only), never by echoing the draft, so the
+fakes cannot make a generated scenario pass.
+
+**Run behaviour.** `run()` takes `generator` and `generated_store`; `RunConfig.generate_max`
+(CLI `--generate N`, default 0 = off) enables it. Accepted scenarios join this run's catalog
+and the planner ranks them with the curated ones under the same budget. Generator spend counts
+against `max_spend_usd`. If the generator fails or crashes the run continues with the curated
+scenarios and records `generation.degraded` + `error` (no fallback scenarios are invented).
+Everything is logged on `swarm.plan.attrs.generation` (drafted/accepted/rejected + reasons);
+`swarm.probe`/`swarm.verdict` carry `attrs.origin`; `swarm.run_end` lists `generated_ids`.
+
+**Human gate (`GeneratedStore`, `.data/swarmshield/generated.json`).** Generated scenarios
+run immediately in the sandbox but stay `pending`. `generated promote <id>` appends one to
+`attack/catalog/scenarios/<customer>.generated.yaml` (so it enters `catalog_version`) and
+requires that it has been run at least once (or `--force`); `generated reject <id>` retires
+it; `generated list` shows status, run count and last verdict. Replay of a generated finding
+uses `load_full_catalog(store)`.
+
+**Offline use.** `DummyGenerator` (`--dummy-generator`) emits deterministic marker variants of
+curated scenarios, for tests and for demoing the pipeline with no API key.
 
 ---
 

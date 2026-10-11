@@ -39,7 +39,7 @@ def catalog_version(directory: Path = DEFAULT_CATALOG_DIR) -> str:
     return digest.hexdigest()[:12]
 
 
-def _normalise(path: str) -> str:
+def normalise_path(path: str) -> str:
     return re.sub(r"\{\w+\}", "{}", path)
 
 
@@ -50,6 +50,6 @@ def validate_catalog(catalog: Catalog, flags: list[FlagDef]) -> None:
         flag = by_key.get((s.customer_id, s.flag))
         if flag is None:
             raise CatalogError(f"{s.id}: flag {s.flag!r} not in registry for {s.customer_id}")
-        covered = {_normalise(e) for e in flag.endpoints}
-        if _normalise(s.probe.path) not in covered:
+        covered = {normalise_path(e) for e in flag.endpoints}
+        if normalise_path(s.probe.path) not in covered:
             raise CatalogError(f"{s.id}: path {s.probe.path!r} not covered by flag endpoints")
