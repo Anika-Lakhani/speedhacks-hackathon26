@@ -1,34 +1,57 @@
-# customer-c
+# customer-c: security memory
 
-> Placeholder page. Dev C's customer-analysis agent owns this file and will replace it with
-> targeted patches (overview §5.4). Keep the section order.
+page_schema: 1.0 · customer_id: customer-c
+
+<!-- Maintained by distill/customer_analysis via targeted section patches. -->
 
 ## 1. Environment profile & tested revision
-_Not yet distilled._
+
+- app: CMS (posts, comments, uploads)
+- base_url: http://localhost:3003 (local only)
+- tested_revision: unknown
+- last_distilled: never
 
 ## 2. Assets, sensitive actions, trust boundaries, security invariants
-_Not yet distilled._
+
+**Assets**
+- posts and comments
+- uploaded files
+- search index
+
+**Sensitive actions**
+- search (`/search`)
+- comment preview rendering (`/comments/preview`)
+- file uploads (`/uploads`)
+
+**Trust boundaries**
+- user input -> query engine
+- user markup -> other readers' browsers
+- uploaded filename -> server filesystem
+
+**Security invariants**
+- User input is never interpreted as query syntax
+- User-supplied markup is always encoded on output
+- Uploaded files are stored under server-chosen names inside the upload root
 
 ## 3. Recent code/config changes
-_Not yet distilled._
+
 
 ## 4. Observed events & notable sequences
-_Not yet distilled._
+
 
 ## 5. Confirmed findings & evidence
-_None yet._
+
 
 ## 6. Hypotheses & unverified leads
-_None yet._
+
 
 ## 7. Prior swarm runs
-_None yet._
+
 
 ## 8. Defenses & regression tests
-_None yet._
+
 
 ## 9. Open risks & prioritized next tests
-_None yet._
+
 
 ## 10. Candidate lessons for shared intelligence
-_None yet._

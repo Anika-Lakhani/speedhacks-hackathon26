@@ -1,0 +1,759 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SwarmShield event store",
+    "description": "Per-tenant event store for the SwarmShield demo (Dev B). Every read is scoped to exactly one customer_id.",
+    "version": "0.3.0"
+  },
+  "paths": {
+    "/events": {
+      "post": {
+        "tags": [
+          "ingest"
+        ],
+        "summary": "Post Events",
+        "description": "One event object or an array of events. Each is accepted or rejected on its own.",
+        "operationId": "post_events_events_post",
+        "responses": {
+          "200": {
+            "description": "Per-event result (dev-B 4a.6)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accepted": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "rejected": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "event_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body is not JSON, or not an object or array"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/Event"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Event"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "read"
+        ],
+        "summary": "One tenant's events in a time window (a slice, oldest first)",
+        "operationId": "get_events_events_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9-]*$",
+              "description": "Tenant to read. Required; exactly one.",
+              "examples": [
+                "customer-a"
+              ],
+              "title": "Customer Id"
+            },
+            "description": "Tenant to read. Required; exactly one."
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "RFC 3339, inclusive. 'Events since timestamp X'.",
+              "title": "Since"
+            },
+            "description": "RFC 3339, inclusive. 'Events since timestamp X'."
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "RFC 3339, exclusive.",
+              "title": "Until"
+            },
+            "description": "RFC 3339, exclusive."
+          },
+          {
+            "name": "event_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Event Type"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "description": "Page size (max 1000).",
+              "default": 500,
+              "title": "Limit"
+            },
+            "description": "Page size (max 1000)."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "X-Next-Cursor from the previous page. Send the same other params.",
+              "title": "Cursor"
+            },
+            "description": "X-Next-Cursor from the previous page. Send the same other params."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Event"
+                  },
+                  "title": "Response Get Events Events Get"
+                }
+              }
+            },
+            "headers": {
+              "X-Next-Cursor": {
+                "description": "Opaque cursor positioned after the last event returned. Absent only when the page is empty and no cursor was sent. Bound to this customer_id and query.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Has-More": {
+                "description": "`true` if more events matched beyond this page right now.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true",
+                    "false"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cursor invalid, tampered, or issued for another tenant or query; or customer_id given more than once"
+          },
+          "404": {
+            "description": "Unknown customer_id (or revision / evidence not found for it)"
+          },
+          "422": {
+            "description": "Missing, empty or malformed parameter"
+          }
+        }
+      }
+    },
+    "/evidence": {
+      "post": {
+        "tags": [
+          "ingest"
+        ],
+        "summary": "Post Evidence",
+        "description": "Store one artifact: {evidence_ref, request, response, flags_snapshot, code_revision}.",
+        "operationId": "post_evidence_evidence_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "evidence_ref": {
+                    "type": "string"
+                  },
+                  "request": {
+                    "type": "object"
+                  },
+                  "response": {
+                    "type": "object"
+                  },
+                  "flags_snapshot": {
+                    "additionalProperties": {
+                      "type": "boolean"
+                    },
+                    "type": "object"
+                  },
+                  "code_revision": {
+                    "type": "string"
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "evidence_ref",
+                  "request",
+                  "response",
+                  "code_revision"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Stored; returns {evidence_ref}",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Body is not JSON"
+          },
+          "409": {
+            "description": "Already stored (evidence is write-once)"
+          },
+          "422": {
+            "description": "Malformed ref, unknown tenant, or bad artifact"
+          }
+        }
+      }
+    },
+    "/events/since-revision": {
+      "get": {
+        "tags": [
+          "read"
+        ],
+        "summary": "One tenant's events from the first event at code_revision X onward",
+        "operationId": "get_events_since_revision_events_since_revision_get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9-]*$",
+              "description": "Tenant to read. Required; exactly one.",
+              "examples": [
+                "customer-a"
+              ],
+              "title": "Customer Id"
+            },
+            "description": "Tenant to read. Required; exactly one."
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A code_revision value.",
+              "title": "Revision"
+            },
+            "description": "A code_revision value."
+          },
+          {
+            "name": "event_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Event Type"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "description": "Page size (max 1000).",
+              "default": 500,
+              "title": "Limit"
+            },
+            "description": "Page size (max 1000)."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "X-Next-Cursor from the previous page. Send the same other params.",
+              "title": "Cursor"
+            },
+            "description": "X-Next-Cursor from the previous page. Send the same other params."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Event"
+                  },
+                  "title": "Response Get Events Since Revision Events Since Revision Get"
+                }
+              }
+            },
+            "headers": {
+              "X-Next-Cursor": {
+                "description": "Opaque cursor positioned after the last event returned. Absent only when the page is empty and no cursor was sent. Bound to this customer_id and query.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Has-More": {
+                "description": "`true` if more events matched beyond this page right now.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true",
+                    "false"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cursor invalid, tampered, or issued for another tenant or query; or customer_id given more than once"
+          },
+          "404": {
+            "description": "Unknown customer_id (or revision / evidence not found for it)"
+          },
+          "422": {
+            "description": "Missing, empty or malformed parameter"
+          }
+        }
+      }
+    },
+    "/evidence/{evidence_ref}": {
+      "get": {
+        "tags": [
+          "read"
+        ],
+        "summary": "The raw request/response artifact behind an evidence_ref",
+        "operationId": "get_evidence_evidence__evidence_ref__get",
+        "parameters": [
+          {
+            "name": "evidence_ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Evidence Ref"
+            }
+          },
+          {
+            "name": "customer_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9-]*$",
+              "description": "Tenant to read. Required; exactly one.",
+              "examples": [
+                "customer-a"
+              ],
+              "title": "Customer Id"
+            },
+            "description": "Tenant to read. Required; exactly one."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Artifact"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cursor invalid, tampered, or issued for another tenant or query; or customer_id given more than once"
+          },
+          "404": {
+            "description": "Unknown customer_id (or revision / evidence not found for it)"
+          },
+          "422": {
+            "description": "Missing, empty or malformed parameter"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "ops"
+        ],
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Actor": {
+        "type": "string",
+        "enum": [
+          "user",
+          "system",
+          "swarm_agent"
+        ],
+        "title": "Actor"
+      },
+      "Artifact": {
+        "properties": {
+          "request": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Request"
+          },
+          "response": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Response"
+          },
+          "flags_snapshot": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Flags Snapshot",
+            "default": {}
+          },
+          "code_revision": {
+            "type": "string",
+            "title": "Code Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request",
+          "response",
+          "code_revision"
+        ],
+        "title": "Artifact",
+        "description": "Full request/response record behind an evidence_ref (dev-B \u00a74a.5)."
+      },
+      "Event": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "pattern": "^[^/]+$",
+            "title": "Event Id",
+            "description": "Primary key; non-empty, no '/'. Defaults to a uuid4"
+          },
+          "customer_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "title": "Customer Id",
+            "description": "Tenant scope"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts",
+            "description": "Event time, RFC 3339 with timezone"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[^/]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id",
+            "description": "Groups events from one run; null for organic events. No '/', not 'organic'"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool",
+            "description": "Tool/agent identity, if any"
+          },
+          "event_type": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Event Type",
+            "description": "e.g. auth.login, probe.result"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target",
+            "description": "Endpoint/resource"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action",
+            "description": "What was attempted"
+          },
+          "policy_outcome": {
+            "$ref": "#/components/schemas/PolicyOutcome"
+          },
+          "state_transition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Transition",
+            "description": "Before->after, if relevant"
+          },
+          "code_revision": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Code Revision",
+            "description": "Version of the site under test"
+          },
+          "knowledge_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge Version",
+            "description": "Version of shared-intelligence.md in play"
+          },
+          "simulated": {
+            "type": "boolean",
+            "title": "Simulated",
+            "description": "True for anything the attack engine produces"
+          },
+          "evidence_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^ev://[^/]+/[^/]+/[^/]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Ref",
+            "description": "ev://<customer_id>/<run_id|organic>/<event_id>"
+          },
+          "scenario_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenario Id",
+            "description": "Scenario catalog ID"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Verdict"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only on swarm.verdict"
+          },
+          "attrs": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attrs",
+            "description": "Free-form extras; never required for parsing"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "customer_id",
+          "ts",
+          "actor",
+          "event_type",
+          "target",
+          "action",
+          "policy_outcome",
+          "code_revision",
+          "simulated"
+        ],
+        "title": "Event"
+      },
+      "PolicyOutcome": {
+        "type": "string",
+        "enum": [
+          "allow",
+          "deny",
+          "flag"
+        ],
+        "title": "PolicyOutcome"
+      },
+      "Verdict": {
+        "type": "string",
+        "enum": [
+          "confirmed",
+          "not_reproduced",
+          "inconclusive",
+          "blocked"
+        ],
+        "title": "Verdict",
+        "description": "Outcome of one scenario test, checked against the scenario's invariant."
+      }
+    }
+  }
+}
