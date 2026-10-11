@@ -1,0 +1,54 @@
+<section id="architecture" data-transition="fade" style="background:radial-gradient(circle at 100% 0%, #11293A 0%, #0B0F17 55%);color:#E8ECF2;font-family:'Inter', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column">
+<img src="/_blob/76865eee2e3b542ca05276c45ad5deff" alt="SwarmShield logo" style="position:absolute;left:1628px;top:52px;width:164px;height:40px;object-fit:contain">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;font-weight:700;letter-spacing:4px;color:#22D3EE">ARCHITECTURE</p>
+<h2 style="font-family:'Space Grotesk', Arial, sans-serif;font-size:72px;font-weight:700;line-height:1.1;color:#E8ECF2">One loop, four components.</h2>
+</div>
+<div style="position:absolute;left:128px;top:300px;width:480px;height:240px;background:linear-gradient(180deg, #172030 0%, #10151F 100%);border:2px dashed #3A4458;border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:8px">
+<p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:32px;font-weight:700;line-height:1.2">Demo customer sites</p>
+<p style="font-size:24px;line-height:1.4;color:#8A94A6">3 apps, 9 toggleable weakness flags. Probes only ever get synthetic data.</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">sites/ · <span style="color:#FACC15">building</span></p>
+</div>
+<div style="position:absolute;left:720px;top:300px;width:480px;height:240px;background:linear-gradient(180deg, #172030 0%, #10151F 100%);border:1px solid #232B3B;border-radius:20px;box-shadow:0px 24px 48px rgba(0,0,0,0.35);padding:24px;display:flex;flex-direction:column;gap:8px">
+<p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:32px;font-weight:700;line-height:1.2">Keewano event store</p>
+<p style="font-size:24px;line-height:1.4;color:#8A94A6">Per-customer tables, schema-validated ingest, write-once evidence, sliced reads.</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">keewano/ · <span style="color:#34D399">built</span></p>
+</div>
+<div style="position:absolute;left:1312px;top:300px;width:480px;height:240px;background:linear-gradient(180deg, #172030 0%, #10151F 100%);border:2px dashed #3A4458;border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:8px">
+<p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:32px;font-weight:700;line-height:1.2">Security memory</p>
+<p style="font-size:24px;line-height:1.4;color:#8A94A6">customer-X.md per tenant, plus privacy-gated shared-intelligence.md.</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">memory/ · <span style="color:#FACC15">building</span></p>
+</div>
+<div style="position:absolute;left:128px;top:640px;width:1664px;height:252px;background:linear-gradient(135deg, #0F3440 0%, #0E1A24 100%);border:2px solid #22D3EE;border-radius:20px;box-shadow:0px 0px 56px rgba(34,211,238,0.25);padding:24px 32px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;flex-direction:row;gap:16px;align-items:baseline">
+<p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:32px;font-weight:700;line-height:1.2">Attack harness</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">attack/ · <span style="color:#34D399">built</span></p>
+</div>
+<div style="display:flex;flex-direction:row;gap:16px;align-items:center">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#E8ECF2;background:#0B0F17;border:1px solid #232B3B;border-radius:12px;padding:12px 20px">Scenario catalog</p>
+<x-shape kind="arrow-right" style="width:32px;height:18px;background:#22D3EE"></x-shape>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#E8ECF2;background:#0B0F17;border:1px solid #232B3B;border-radius:12px;padding:12px 20px">LLM planner (Gemini)</p>
+<x-shape kind="arrow-right" style="width:32px;height:18px;background:#22D3EE"></x-shape>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#E8ECF2;background:#0B0F17;border:1px solid #232B3B;border-radius:12px;padding:12px 20px">Probe engine</p>
+<x-shape kind="arrow-right" style="width:32px;height:18px;background:#22D3EE"></x-shape>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#E8ECF2;background:#0F2A24;border:1px solid #34D399;border-radius:12px;padding:12px 20px">Verifier</p>
+<x-shape kind="arrow-right" style="width:32px;height:18px;background:#22D3EE"></x-shape>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#E8ECF2;background:#0B0F17;border:1px solid #232B3B;border-radius:12px;padding:12px 20px">Approval gate</p>
+</div>
+<p style="font-size:24px;line-height:1.4;color:#8A94A6">Budgets and allowlists enforced in code · every run stamped with code + knowledge version · replay from evidence</p>
+</div>
+<x-connector x1="612" y1="420" x2="716" y2="420" head="end" style="color:#22D3EE;border-width:3px"></x-connector>
+<p style="position:absolute;left:612px;top:372px;width:104px;text-align:center;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">events</p>
+<x-connector x1="1204" y1="420" x2="1308" y2="420" head="end" style="color:#22D3EE;border-width:3px"></x-connector>
+<p style="position:absolute;left:1204px;top:372px;width:104px;text-align:center;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">slices</p>
+<x-connector x1="368" y1="636" x2="368" y2="544" head="end" style="color:#22D3EE;border-width:3px"></x-connector>
+<p style="position:absolute;left:384px;top:572px;width:240px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">marked probes</p>
+<x-connector x1="900" y1="544" x2="900" y2="636" head="end" style="color:#22D3EE;border-width:3px"></x-connector>
+<p style="position:absolute;left:640px;top:572px;width:244px;text-align:right;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">event history</p>
+<x-connector x1="1020" y1="636" x2="1020" y2="544" head="end" style="color:#34D399;border-width:3px"></x-connector>
+<p style="position:absolute;left:1036px;top:572px;width:260px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">verdicts</p>
+<x-connector x1="1552" y1="544" x2="1552" y2="636" head="end" style="color:#22D3EE;border-width:3px"></x-connector>
+<p style="position:absolute;left:1568px;top:572px;width:224px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">context</p>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#8A94A6">Solid = built and tested on our repo today. Dashed = in progress.</p>
+<aside>Four components, one loop. The demo customer sites emit security events and answer our marked probes using toggleable weakness flags — never real data. Everything lands in Keewano, our per-customer event store: every event is validated against a frozen contract, evidence is write-once so findings stay reproducible, and reads are tenant-scoped slices, so no query can cross customers. Keewano feeds the security memory: a page per customer, plus a privacy-gated shared-intelligence page. The attack harness reads that memory and the event history, the LLM planner — Gemini — picks scenarios from a fixed catalog, the probe engine fires them, a deterministic verifier judges them, and confirmed findings wait at a human approval gate. Verdicts and evidence go straight back into Keewano, and the loop starts again. Status: the event store and attack harness are built and tested; the demo sites and memory layer are being finished now. [UPDATE STATUS BEFORE RECORDING]</aside>
+</section>
