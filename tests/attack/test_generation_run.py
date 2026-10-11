@@ -49,7 +49,7 @@ class Static:
         )
 
 
-def search_draft(status=500, body=("query_error",), q="SWARMSHIELD_Q'"):
+def search_draft(status=500, body=("query_error",), q="' OR 1=1 --"):
     return ScenarioDraft(
         title="Search marker",
         weakness_class="injection",
@@ -90,14 +90,23 @@ def test_correct_guess_with_flag_off_is_not_reproduced(catalog, keewano, site_fa
 
 
 def test_invalid_drafts_never_reach_the_site(catalog, keewano, site_factory):
+    """Structural gate: unknown endpoints and other customers' flags never run."""
     site = site_factory("customer-c", unsafe_input_handling=True)
-    evil = search_draft(q="' OR 1=1 --")
     off_path = search_draft()
     off_path.probe.path = "/admin/export"
-    report, store = run_with(catalog, keewano, site, Static([evil, off_path]))
+    wrong_flag = search_draft()
+    wrong_flag.flag = "idor_orders"
+    report, store = run_with(catalog, keewano, site, Static([off_path, wrong_flag]))
     assert report.generation["accepted"] == [] and len(report.generation["rejected"]) == 2
     assert not store.records
     assert all(path in {"/search", "/comments/preview", "/uploads"} for _, path in site.calls)
+
+
+def test_payload_shaped_inputs_run_against_the_simulated_site(catalog, keewano, site_factory):
+    site = site_factory("customer-c", unsafe_input_handling=True)
+    report, _ = run_with(catalog, keewano, site, Static([search_draft(q="' OR 1=1 --")]))
+    o = next(o for o in report.outcomes if o.scenario_id == "SCN-GEN-001")
+    assert o.verdict.value == "confirmed"
 
 
 def test_generation_info_and_origin_are_logged_in_events(catalog, keewano, site_factory):

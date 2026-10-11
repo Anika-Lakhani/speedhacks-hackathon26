@@ -137,7 +137,7 @@ Per-item metadata (required): `id` · `version` · `status` · `source_class` ·
 - Demo sites expose **vulnerability flags**: toggleable conditions that make a known weakness present or absent.
 - A **scenario catalog** describes techniques as *data* (preconditions, probe, expected signal).
 - The harness fires **benign, clearly-marked probes**; the site returns a **simulated outcome** derived from its flags.
-- **The planner model may also draft *new* scenarios, but only as data.** Drafts are validated in code before anything runs: known flag and endpoint only, GET/POST only, parameter values limited to synthetic fixtures or short inert `SWARMSHIELD…` markers (payload-like tokens refused), IDs assigned by code, and a human gate before a draft joins the permanent catalog. The model still never sends a request or writes an exploit (see `attack/SPEC.md` §2b).
+- **The planner model may also draft *new* scenarios, as data.** Drafts are validated in code before anything runs: known flag and endpoint only, GET/POST only, bounded parameter values, IDs assigned by code, and a human gate before a draft joins the permanent catalog. The model never sends a request itself, and probes only reach allowlisted demo sites (see `attack/SPEC.md` §2b).
 - **Claude plans, prioritizes, and interprets. Claude does not exploit.** This keeps the agent in an allowed analysis role and avoids refusals.
 - Every resulting event carries `simulated: true` and runs only against demo sites in an isolated environment.
 

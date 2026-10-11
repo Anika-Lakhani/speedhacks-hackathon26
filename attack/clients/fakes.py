@@ -73,6 +73,8 @@ class FakeSite:
         if vulnerable:
             status = sig.status or 200
             body: dict[str, Any] = {"simulated": True, "echo": list(sig.body_contains)}
+            # Vulnerable apps reflect what they were given; so does the simulation.
+            body["request_echo"] = query or json or {}
             if sig.owner_is_other:
                 body["owner_user_id"] = OTHER_USER
             resp_headers: dict[str, str] = {}

@@ -30,41 +30,18 @@ GENERATED_PREFIX = "SCN-GEN-"
 DEFAULT_STORE_PATH = Path(".data") / "swarmshield" / "generated.json"
 
 ALLOWED_METHODS = {"GET", "POST"}
-MARKER_PREFIX = "SWARMSHIELD"
-# Every model-written value must be an inert, identifiable marker: fixed prefix, short,
-# restricted charset (no whitespace, quotes-to-break-out, shell or SQL separators).
-MARKER_RE = re.compile(r"^SWARMSHIELD[A-Za-z0-9_\-.:/'<>=%]{0,48}$")
-# Belt and braces on top of the structural rule: tokens that look like real attack
-# payloads are refused even inside a SWARMSHIELD marker.
-HOSTILE_TOKENS = (
-    "/etc/",
-    "passwd",
-    "shadow",
-    "onerror",
-    "onload",
-    "javascript:",
-    "<script",
-    "<iframe",
-    "union",
-    "select",
-    "sleep",
-    "drop",
-    "exec",
-    "eval",
-    "alert(",
-    "--",
-    "cmd",
-    "powershell",
+MAX_VALUE_LEN = 200
+PATH_ID_RE = re.compile(r"^[A-Za-z0-9_\-]{1,40}$")
+VALUE_RULES = (
+    "Parameter values are strings of at most 200 printable characters (no newlines). Use "
+    "`fixture:<name>` (names are listed) for synthetic objects such as other users' order or "
+    "account IDs. Path placeholder values must be a fixture or a plain ID of letters, digits, "
+    "_ and -. Realistic test inputs are fine: the target is a simulated site."
 )
 PATH_RE = re.compile(r"^/[A-Za-z0-9_\-./{}]{0,99}$")
 PARAM_KEY_RE = re.compile(r"^[a-z_][a-z0-9_]{0,30}$")
 HEADER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9-]{0,40}$")
 CLASS_RE = re.compile(r"^[a-z0-9_]{2,40}$")
-MARKER_RULES = (
-    f"Parameter values must be either `fixture:<name>` (names are listed) or a marker string "
-    f"starting with {MARKER_PREFIX}, at most 60 characters, using only letters, digits and "
-    f"_-.:/'<>=%. Path placeholder values must be fixtures."
-)
 
 
 class DraftParam(BaseModel):
@@ -144,11 +121,10 @@ def _check_value(value: str) -> str | None:
         except fixtures.FixtureError:
             return f"unknown fixture {value!r}"
         return None
-    if len(value) > 60 or not MARKER_RE.match(value):
-        return f"param value {value[:30]!r} is neither a known fixture nor a SWARMSHIELD marker"
-    lowered = value.lower()
-    if hit := next((t for t in HOSTILE_TOKENS if t in lowered), None):
-        return f"param value contains payload-like token {hit!r}"
+    if len(value) > MAX_VALUE_LEN:
+        return f"param value longer than {MAX_VALUE_LEN} characters"
+    if not value.isprintable():
+        return "param value has control characters or newlines"
     return None
 
 
@@ -181,8 +157,12 @@ def _check_draft(draft: ScenarioDraft, flag_def: FlagDef | None, seen: set) -> s
     for key, value in params.items():
         if not PARAM_KEY_RE.match(key):
             return f"bad param name {key!r}"
-        if key in placeholders and not value.startswith(fixtures.PREFIX):
-            return f"path param {key!r} must be a fixture"
+        if (
+            key in placeholders
+            and not value.startswith(fixtures.PREFIX)
+            and not PATH_ID_RE.match(value)
+        ):
+            return f"path param {key!r} must be a fixture or a plain ID"
         if (reason := _check_value(value)) is not None:
             return reason
     sig = draft.expected_signal
@@ -374,7 +354,7 @@ __all__ = [
     "GenerationOutput",
     "GeneratedRecord",
     "GeneratedStore",
-    "MARKER_RULES",
+    "VALUE_RULES",
     "PromotionError",
     "Rejection",
     "ScenarioDraft",

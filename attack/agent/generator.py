@@ -34,7 +34,7 @@ class GenerationRequest(BaseModel):
     flags: list[dict]  # [{flag, endpoints, weakness_classes}]
     existing: list[dict]  # [{id, flag, method, path, params, title, origin}]
     fixtures: list[str]
-    marker_rules: str
+    value_rules: str
 
 
 class GenerationOutcome(BaseModel):

@@ -164,11 +164,11 @@ list of pairs because Gemini drops the value type of a free-form map and would e
 rejected with a reason and never reaches the engine:
 - `flag` exists in the registry **for this customer**; `path` is an endpoint of **that flag**.
 - Method is GET or POST; path charset is restricted and may not contain `..`.
-- Param **values** are either `fixture:<known name>` or an inert marker: must start with
-  `SWARMSHIELD`, ≤60 chars, charset `[A-Za-z0-9_\-.:/'<>=%]` (no whitespace, `;`, `|`, `&`,
-  `$`, backticks) and may not contain payload-like tokens (`/etc/`, `passwd`, `onerror`,
-  `javascript:`, `union`, `select`, `sleep`, `--`, …; `HOSTILE_TOKENS`). **Path placeholder
-  values must be fixtures.** ≤6 params, snake_case names.
+- Param **values** are strings of ≤200 printable characters (no newlines), or
+  `fixture:<known name>`. Realistic test inputs (quotes, markup, traversal-shaped strings) are
+  allowed: the target is a simulated site, reached only through the target allowlist. Path
+  placeholder values must be a fixture or a plain ID (`[A-Za-z0-9_-]{1,40}`). ≤6 params,
+  snake_case names.
 - `expected_signal` is bounded (≤5 `body_contains` of ≤64 chars, ≤3 `header_absent`) and
   must state a status.
 - Not a duplicate (flag, method, normalised path, params) of any existing, stored or
@@ -181,7 +181,8 @@ about what a vulnerable response looks like. The verifier still compares the rea
 with the flag ground truth (§4), so a bad guess surfaces as `inconclusive` ("probe did not
 trigger a weakness the flag says is present") and a good one as `confirmed`. `FakeSite`
 answers by **route** (built from curated scenarios only), never by echoing the draft, so the
-fakes cannot make a generated scenario pass.
+fakes cannot make a generated scenario pass. Its vulnerable responses reflect the request
+params (`request_echo`), as a real reflected-input weakness would.
 
 **Run behaviour.** `run()` takes `generator` and `generated_store`; `RunConfig.generate_max`
 (CLI `--generate N`, default 0 = off) enables it. Accepted scenarios join this run's catalog

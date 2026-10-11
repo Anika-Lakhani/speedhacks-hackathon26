@@ -67,16 +67,10 @@ def test_good_draft_becomes_generated_scenario(catalog):
         ({"probe": probe(path="/search/../etc")}, "disallowed characters"),
         ({"probe": probe(method="DELETE")}, "not allowed"),
         ({"probe": probe(method="PUT")}, "not allowed"),
-        ({"probe": probe(q="' OR 1=1 --")}, "neither a known fixture"),
-        ({"probe": probe(q="SWARMSHIELD has spaces")}, "neither a known fixture"),
-        ({"probe": probe(q="SWARMSHIELD;rm")}, "neither a known fixture"),
-        ({"probe": probe(q="SWARMSHIELD" + "x" * 80)}, "neither a known fixture"),
-        ({"probe": probe(q="/etc/passwd")}, "neither a known fixture"),
+        ({"probe": probe(q="x" * 201)}, "longer than"),
+        ({"probe": probe(q="line1\nline2")}, "control characters"),
+        ({"probe": probe(q="tab\there")}, "control characters"),
         ({"probe": probe(q="fixture:nope")}, "unknown fixture"),
-        ({"probe": probe(q="SWARMSHIELD_x/etc/passwd")}, "payload-like token"),
-        ({"probe": probe(q="SWARMSHIELD_UNION")}, "payload-like token"),
-        ({"probe": probe(q="SWARMSHIELD'--")}, "payload-like token"),
-        ({"probe": probe(q="SWARMSHIELD<img/onerror=x")}, "payload-like token"),
         (
             {
                 "probe": DraftProbe(
@@ -103,15 +97,22 @@ def test_bad_drafts_rejected_with_reason(catalog, kw, reason):
     assert reason in res.rejected[0].reason
 
 
-def test_path_placeholder_must_be_a_fixture(catalog):
-    d = draft(
-        flag="idor_orders",
-        probe=probe(path="/orders/{id}", id="SWARMSHIELD_X"),
-    )
+def test_realistic_test_inputs_are_accepted(catalog):
+    """The value gate is about shape and size, not about refusing realistic inputs."""
+    inputs = ["' OR 1=1 --", "<img src=x onerror=alert(1)>", "../../etc/passwd", "a" * 200]
+    drafts = [draft(probe=probe(q=v)) for v in inputs]
+    res = validate(drafts, catalog, max_new=10)
+    assert len(res.accepted) == len(inputs) and not res.rejected
+
+
+def test_path_placeholder_must_be_a_fixture_or_plain_id(catalog):
+    d = draft(flag="idor_orders", probe=probe(path="/orders/{id}", id="../../admin"))
     res = validate_drafts([d], "customer-a", load_flags(), [], max_new=3)
-    assert "must be a fixture" in res.rejected[0].reason
-    ok = draft(flag="idor_orders", probe=probe(path="/orders/{id}", id="fixture:other_order"))
-    assert validate_drafts([ok], "customer-a", load_flags(), [], max_new=3).accepted
+    assert "fixture or a plain ID" in res.rejected[0].reason
+    plain = draft(flag="idor_orders", probe=probe(path="/orders/{id}", id="ORD-12345"))
+    assert validate_drafts([plain], "customer-a", load_flags(), [], max_new=3).accepted
+    fix = draft(flag="idor_orders", probe=probe(path="/orders/{id}", id="fixture:other_order"))
+    assert validate_drafts([fix], "customer-a", load_flags(), [], max_new=3).accepted
 
 
 def test_duplicates_rejected_against_existing_and_within_batch(catalog):
@@ -239,7 +240,7 @@ def gen_request(max_new=3):
         flags=[{"flag": "unsafe_input_handling", "endpoints": ["/search"]}],
         existing=[],
         fixtures=["injection_marker"],
-        marker_rules="rules",
+        value_rules="rules",
     )
 
 
@@ -269,7 +270,7 @@ def test_gemini_generator_parses_drafts_and_sends_safe_schema():
     cfg = client.calls[0]["config"]
     assert "additionalProperties" not in json.dumps(cfg["response_json_schema"])
     assert "def search" in client.calls[0]["contents"]  # the code reaches the model
-    assert "SWARMSHIELD" in cfg["system_instruction"]  # marker rule is in the prompt
+    assert "flag" in cfg["system_instruction"]
 
 
 def test_params_are_a_list_of_pairs_in_the_schema():

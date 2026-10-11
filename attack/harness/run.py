@@ -11,7 +11,7 @@ from attack.agent import GenerationOutcome, GenerationRequest, PlanRequest, Scen
 from attack.agent.planner import Planner, sanitize_plan
 from attack.catalog import Catalog, FlagDef, Scenario, catalog_version, load_catalog, load_flags
 from attack.catalog.fixtures import FIXTURES
-from attack.catalog.generation import MARKER_RULES, GeneratedStore, validate_drafts
+from attack.catalog.generation import VALUE_RULES, GeneratedStore, validate_drafts
 from attack.engine import ProbeResult, run_probe
 from attack.engine.probe import BLOCKED
 from attack.harness import context
@@ -379,7 +379,7 @@ def _generate(
             for s in existing
         ],
         fixtures=sorted(FIXTURES),
-        marker_rules=MARKER_RULES,
+        value_rules=VALUE_RULES,
     )
     try:
         outcome = generator.generate(request)

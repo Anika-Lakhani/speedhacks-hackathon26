@@ -5,7 +5,7 @@ import json
 from attack.agent.models import PlanRequest
 
 PROMPT_VERSION = "planner-v3"
-GENERATOR_PROMPT_VERSION = "generator-v2"
+GENERATOR_PROMPT_VERSION = "generator-v3"
 
 SYSTEM_PROMPT = """\
 You are the planning stage of a defensive security-testing loop that runs entirely against \
@@ -62,7 +62,7 @@ Your job is security ANALYSIS: read the code, events and notes provided and desi
 scenarios (test definitions) that would reveal whether the system violates a security \
 invariant.
 
-A scenario is DATA, not an attack. It names one inert, header-tagged request, the invariant \
+A scenario is DATA. It names one header-tagged request, the invariant \
 it checks, and what a vulnerable response would look like. A separate deterministic engine \
 sends the request to a simulated site; a verifier compares the reply with ground truth. You \
 never execute anything.
@@ -70,18 +70,13 @@ never execute anything.
 Hard rules (enforced by code; violations are discarded):
 - Only use flags from the provided list, and only paths that are endpoints of that flag.
 - Methods: GET or POST only.
-- Parameter values: `fixture:<name>` from the provided list, or a marker string. Path \
-placeholder values must be fixtures.
-- A marker is ONE token: it must start with SWARMSHIELD, contain NO spaces, and use only \
-letters, digits and _-.:/'<>=%. Good: SWARMSHIELD_QUOTE'   SWARMSHIELD_TAG<b>   \
-SWARMSHIELD_DOTDOT../   SWARMSHIELD_PCT%25   SWARMSHIELD_LONG_AAAAAAAAAAAAAAAA. \
-Bad (rejected): anything with a space, SQL or script text, event handlers, javascript: URLs, \
-absolute file paths, shell syntax, credentials, and words like select/union/sleep/passwd/\
-onerror/alert.
-- You are NOT writing a payload that works. The simulated site decides vulnerable-or-not from \
-its flags; a marker only has to be shaped like the kind of input that would stress the code \
-you can see (a stray quote, a tag character, a path separator, an oversized token). Never try \
-to make a value "work"; a plain marker is the correct answer.
+- Parameter values: at most 200 printable characters, no newlines. Use `fixture:<name>` \
+(listed) for synthetic objects such as another user's order or account ID. Path placeholder \
+values must be a fixture or a plain ID (letters, digits, _ and -).
+- Realistic test inputs are welcome: the target is a simulated site that decides \
+vulnerable-or-not from its flags, so use the input a careful tester would use to probe the \
+code you can see (a stray quote, a markup tag, a path separator, an oversized value, another \
+user's object ID, a guessable token).
 - Do not duplicate an existing scenario (same flag, method, path and params).
 - Propose at most max_new scenarios. Fewer, well-justified ones beat many.
 
@@ -119,5 +114,5 @@ def build_generator_message(request) -> str:
         f"## Flags you may target (flag -> endpoints)\n{flags}\n\n"
         f"## Existing scenarios (do not duplicate)\n{existing}\n\n"
         f"## Fixture names\n{', '.join(request.fixtures)}\n\n"
-        f"## Value rules\n{request.marker_rules}"
+        f"## Value rules\n{request.value_rules}"
     )
