@@ -350,3 +350,53 @@ def test_review_cli_flow(tmp_path, capsys):
     assert cli([*base, "release", qid, "--note", "sample number"]) == 0
     assert "### SI-object_access_authz" in (tmp_path / "shared-intelligence.md").read_text()
     assert cli([*base, "audit"]) == 0
+
+
+def _page_with(tmp_path, *candidates):
+    scaffold(tmp_path)
+    page = tmp_path / "customers" / "customer-a.md"
+    ops = [Op(10, c.key, c.line) for c in candidates]
+    page.write_text(apply_patch(page.read_text(), Patch("customer-a", ops)))
+    return ["--memory-dir", str(tmp_path)]
+
+
+def test_lifecycle_cli_commands(tmp_path, capsys):
+    base = _page_with(tmp_path, cand(), cand("ssrf"))
+    assert cli([*base, "update"]) == 0  # 0.2.0: two items
+    shared = tmp_path / "shared-intelligence.md"
+
+    assert cli([*base, "supersede", "SI-server_side_fetch", "--by", OBJ, "--reason", "merged"]) == 0
+    assert "#### SI-server_side_fetch" in shared.read_text()  # 0.3.0
+
+    assert cli([*base, "retract", OBJ, "--reason", "poisoned on review"]) == 0
+    assert "#### SI-object_access_authz" in shared.read_text()  # 0.4.0
+    assert "### SI-" not in shared.read_text().replace("#### SI-", "")
+
+    assert cli([*base, "rollback", "0.2.0"]) == 0  # 0.5.0 restores both items
+    text = shared.read_text()
+    assert "knowledge_version: 0.5.0" in text
+    assert "### SI-object_access_authz" in text and "### SI-server_side_fetch" in text
+
+    capsys.readouterr()
+    assert cli([*base, "retract", "SI-nope", "--reason", "x"]) == 1
+    assert cli([*base, "rollback", "9.9.9"]) == 1
+    assert cli([*base, "retract", OBJ, "--reason", "seen on customer-a"]) == 1  # privacy gate
+    assert capsys.readouterr().err.count("error:") == 3
+    actions = [
+        json.loads(x)["action"]
+        for x in (tmp_path / "shared" / "audit.jsonl").read_text().splitlines()
+    ]
+    assert actions == ["add", "add", "supersede", "retract", "rollback"]
+
+
+def test_reject_cli(tmp_path, capsys):
+    base = _page_with(tmp_path, cand(extra=PHONE))
+    assert cli([*base, "update"]) == 0
+    capsys.readouterr()
+    assert cli([*base, "review"]) == 0
+    qid = capsys.readouterr().out.split()[0]
+    assert cli([*base, "reject", qid, "--note", "real number; removed from page"]) == 0
+    assert "#### Q-" not in (tmp_path / "shared-intelligence.md").read_text()
+    capsys.readouterr()
+    assert cli([*base, "review"]) == 0
+    assert "0 pending review" in capsys.readouterr().out

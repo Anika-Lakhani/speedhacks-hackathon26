@@ -96,8 +96,10 @@ def analyze(
     *,
     changes: Iterable[Change] = (),
     approvals: Iterable[tuple[str, str]] = (),
+    knowledge_version: str | None = None,
 ) -> Analysis:
-    """`approvals` holds approved (run_id, scenario_id) pairs from Dev A's approval queue."""
+    """`approvals` holds approved (run_id, scenario_id) pairs from Dev A's approval queue.
+    `knowledge_version` is the shared corpus version current at distill time (§1)."""
     events: list[Event] = []
     skipped: list[str] = []
     for raw in raw_events:
@@ -112,7 +114,7 @@ def analyze(
         events.append(event)
     events.sort(key=lambda e: (e.ts, e.event_id))
     run = _Run(customer_id, page_text, catalog, set(approvals))
-    run.distill(events, list(changes))
+    run.distill(events, list(changes), knowledge_version)
     return Analysis(minimize(Patch(customer_id, run.ops), page_text), skipped)
 
 
@@ -165,8 +167,12 @@ class _Run:
 
     # ---- distillation -----------------------------------------------------------------
 
-    def distill(self, events: list[Event], changes: list[Change]) -> None:
+    def distill(
+        self, events: list[Event], changes: list[Change], knowledge_version: str | None
+    ) -> None:
         verdicts = [e for e in events if e.event_type == "swarm.verdict" and e.scenario_id]
+        if knowledge_version:
+            self.put_field("knowledge_version", clean(knowledge_version))
         self.environment(events)
         self.changes(events, changes)
         self.observations(events)

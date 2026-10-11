@@ -18,6 +18,7 @@ from pathlib import Path
 import httpx
 
 from attack.catalog import load_catalog
+from attack.harness.context import read_knowledge_version
 from distill.customer_analysis.analyze import Change, analyze
 from distill.customer_analysis.patch import apply_patch, read_entries, render_diff
 from distill.customer_analysis.source import EventSource
@@ -94,6 +95,7 @@ def main(argv=None, source: EventSource | None = None) -> int:
         load_catalog(),
         changes=changes,
         approvals=load_approvals(args.approvals),
+        knowledge_version=read_knowledge_version(args.memory_dir),
     )
     for reason in result.skipped:
         print(f"skipped: {reason}", file=sys.stderr)

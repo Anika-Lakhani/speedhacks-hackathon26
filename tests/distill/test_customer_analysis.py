@@ -46,7 +46,7 @@ def entry(page, section, key):
     return parse_entry(line) if line else None
 
 
-def swarm_run(tmp_path, catalog, customer_id="customer-a", rev="rev-1", **flags):
+def swarm_run(tmp_path, catalog, customer_id="customer-a", rev="rev-1", planner=None, **flags):
     """One real run of Dev A's harness against a fake site; returns its events."""
     keewano = FakeKeewano()
     defaults = {f.flag: f.default for f in load_flags() if f.customer_id == customer_id}
@@ -59,7 +59,8 @@ def swarm_run(tmp_path, catalog, customer_id="customer-a", rev="rev-1", **flags)
     )
     config = RunConfig(customer_id=customer_id, objective="test", target_allowlist=[site.base_url])
     queue = ApprovalQueue(tmp_path / "approvals.json")
-    report = harness_run(config, DummyPlanner(), site, keewano, catalog, queue, tmp_path)
+    planner = planner or DummyPlanner()
+    report = harness_run(config, planner, site, keewano, catalog, queue, tmp_path)
     return keewano.events, report
 
 
