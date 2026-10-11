@@ -1,0 +1,48 @@
+<section id="built" data-transition="fade" style="background:radial-gradient(circle at 100% 0%, #11293A 0%, #0B0F17 55%);color:#E8ECF2;font-family:'Inter', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;gap:40px">
+<p style="position:absolute;left:1192px;top:56px;width:600px;text-align:right;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;font-weight:700;letter-spacing:4px;color:#8A94A6">SWARMSHIELD</p>
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;font-weight:700;letter-spacing:4px;color:#22D3EE">UNDER THE HOOD</p>
+<h2 style="font-family:'Space Grotesk', Arial, sans-serif;font-size:72px;font-weight:700;line-height:1.1;color:#E8ECF2">How we built it</h2>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;flex-direction:row;align-items:center;gap:16px">
+<div style="flex:1;background:linear-gradient(180deg, #172030 0%, #10151F 100%);border:1px solid #232B3B;border-radius:20px;box-shadow:0px 24px 48px rgba(0,0,0,0.35);padding:28px;display:flex;flex-direction:column;gap:8px">
+<p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:32px;font-weight:700;line-height:1.2">Keewano</p>
+<p style="font-size:24px;line-height:1.4;color:#8A94A6">Memory + event log for each customer</p>
+</div>
+<x-shape kind="arrow-right" style="width:40px;height:24px;background:#22D3EE"></x-shape>
+<div style="flex:1;background:linear-gradient(180deg, #172030 0%, #10151F 100%);border:1px solid #232B3B;border-radius:20px;box-shadow:0px 24px 48px rgba(0,0,0,0.35);padding:28px;display:flex;flex-direction:column;gap:8px">
+<p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:32px;font-weight:700;line-height:1.2">AI planner</p>
+<p style="font-size:24px;line-height:1.4;color:#8A94A6">Ranks scenarios from a fixed catalog</p>
+</div>
+<x-shape kind="arrow-right" style="width:40px;height:24px;background:#22D3EE"></x-shape>
+<div style="flex:1;background:linear-gradient(180deg, #172030 0%, #10151F 100%);border:1px solid #232B3B;border-radius:20px;box-shadow:0px 24px 48px rgba(0,0,0,0.35);padding:28px;display:flex;flex-direction:column;gap:8px">
+<p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:32px;font-weight:700;line-height:1.2">Probe engine</p>
+<p style="font-size:24px;line-height:1.4;color:#8A94A6">Sends only allowlisted, benign requests</p>
+</div>
+<x-shape kind="arrow-right" style="width:40px;height:24px;background:#22D3EE"></x-shape>
+<div style="flex:1;background:linear-gradient(180deg, #0F2A24 0%, #0C1A17 100%);border:2px solid #34D399;border-radius:20px;box-shadow:0px 0px 48px rgba(52,211,153,0.3);padding:28px;display:flex;flex-direction:column;gap:8px">
+<p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:32px;font-weight:700;line-height:1.2">Verifier</p>
+<p style="font-size:24px;line-height:1.4;color:#8A94A6">Checks the response against ground truth</p>
+</div>
+</div>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">Verdicts + evidence flow back into Keewano for the next run.</p>
+</div>
+<div style="display:grid;grid-template-columns:960px 1fr;gap:64px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<h3 style="font-family:'Space Grotesk', Arial, sans-serif;font-size:32px;font-weight:700;color:#E8ECF2">Guardrails</h3>
+<div style="display:flex;flex-direction:row;gap:16px;align-items:start"><x-icon name="Lock" style="color:#22D3EE;width:32px;height:32px"></x-icon><p style="font-size:24px;line-height:1.4;color:#BFC7D5"><b>Allowlists:</b> the AI picks from a fixed catalog and target list</p></div>
+<div style="display:flex;flex-direction:row;gap:16px;align-items:start"><x-icon name="Clock" style="color:#22D3EE;width:32px;height:32px"></x-icon><p style="font-size:24px;line-height:1.4;color:#BFC7D5"><b>Hard budgets in code:</b> 12 scenarios · 120 s · $1 per run</p></div>
+<div style="display:flex;flex-direction:row;gap:16px;align-items:start"><x-icon name="CheckCircle" style="color:#22D3EE;width:32px;height:32px"></x-icon><p style="font-size:24px;line-height:1.4;color:#BFC7D5"><b>Four verdicts:</b> ambiguous never counts as a pass</p></div>
+<div style="display:flex;flex-direction:row;gap:16px;align-items:start"><x-icon name="Users" style="color:#22D3EE;width:32px;height:32px"></x-icon><p style="font-size:24px;line-height:1.4;color:#BFC7D5"><b>Human approval</b> before any finding is "verified"</p></div>
+<div style="display:flex;flex-direction:row;gap:16px;align-items:start"><x-icon name="Database" style="color:#22D3EE;width:32px;height:32px"></x-icon><p style="font-size:24px;line-height:1.4;color:#BFC7D5"><b>Replayable:</b> every finding reproduces from stored evidence</p></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<h3 style="font-family:'Space Grotesk', Arial, sans-serif;font-size:32px;font-weight:700;color:#E8ECF2">Built with</h3>
+<div style="background:linear-gradient(135deg, #0F3440 0%, #0E1A24 100%);border:2px solid #22D3EE;border-radius:12px;box-shadow:0px 0px 32px rgba(34,211,238,0.25);padding:24px"><p style="font-size:24px;line-height:1.4;color:#BFC7D5"><b>Keewano:</b> event store + security memory</p></div>
+<div style="background:#221D0C;border:2px dashed #FACC15;border-radius:12px;padding:24px"><p style="font-size:24px;line-height:1.4;color:#FACC15">[DARWIN: planner, if integrated]</p></div>
+<div style="background:#221D0C;border:2px dashed #FACC15;border-radius:12px;padding:24px"><p style="font-size:24px;line-height:1.4;color:#FACC15">[SPARTA: sandboxes, if integrated]</p></div>
+</div>
+</div>
+<aside>Under the hood: Keewano stores every event and each customer's security memory. An AI planner ranks scenarios from a fixed catalog — it returns scenario IDs, not code. A probe engine executes only allowlisted, benign requests, and a deterministic verifier compares the response against ground truth. Budgets are enforced in code, not in the prompt, and nothing becomes "verified" without a human. Every confirmed finding can be replayed from its stored evidence. [Add one sentence per sponsor actually used.]</aside>
+</section>
