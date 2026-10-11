@@ -60,7 +60,7 @@ Maintain the **flag registry** (`flag_name → affected endpoints/scenarios`) an
 
 ---
 
-## 4a. Integration contract with Dev A (proposed by A — needs B sign-off)
+## 4a. Integration contract with Dev A (proposed by A — working contract, needs Dev B sign-off; §4a.4 frozen by B at M1, Dev C sign-off pending)
 
 Dev A builds against exactly these assumptions using fixtures until your live versions exist. If you change any of them, tell A; everything here should be a one-file change on A's side.
 
@@ -90,17 +90,19 @@ Every site exposes:
 ```
 Initial flag names (from the §2 table): `customer-a`: `idor_orders`, `login_rate_limit_off`, `weak_password_reset` · `customer-b`: `broken_object_authz`, `role_escalation`, `ssrf_callback` · `customer-c`: `unsafe_input_handling`, `missing_output_encoding`, `insecure_upload_path`.
 
-### 4a.4 Event schema additions (§5.1 v1.1, all optional / nullable)
+### 4a.4 Event schema additions (§5.1 v1.1; nullable, required by `event_type` as listed)
 | Field | Type | Notes |
 |-------|------|-------|
 | `scenario_id` | string | Required on `probe.result`, `swarm.probe`, `swarm.verdict` |
-| `verdict` | enum | `confirmed` \| `not_reproduced` \| `inconclusive` \| `blocked` (§5.3); only on `swarm.verdict` |
+| `verdict` | enum | `confirmed` \| `not_reproduced` \| `inconclusive` \| `blocked` (§5.3); required on `swarm.verdict`, forbidden elsewhere |
 | `attrs` | JSON object | Free-form extras (confidence, severity, invariant); never required for parsing |
 
 `event_type` vocabulary, split so there are no duplicate events:
 - **Site emits** (`actor: system`): organic types (`auth.login`, `order.access`, ...) and `probe.result`, which records what the site actually did with a marked request.
 - **A's harness emits** (`actor: swarm_agent`): `swarm.run_start`, `swarm.plan`, `swarm.probe`, `swarm.verdict`, `swarm.run_end`.
 - All probe and swarm events have `simulated: true` and share the run's `run_id`.
+- `probe.result` `policy_outcome`: `allow` = flag on, synthetic vulnerable response returned; `deny` = flag off, secure response returned; `flag` = the site detected and flagged the probe.
+- Full field reference, required fields and examples: `docs/event-schema.md`. Validate with `contracts.validate_event` / `validate_batch`.
 
 ### 4a.5 Evidence
 - `evidence_ref` format: `ev://<customer_id>/<run_id>/<event_id>`; organic events use `organic` in place of `run_id`.

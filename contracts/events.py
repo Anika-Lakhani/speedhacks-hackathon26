@@ -9,19 +9,34 @@ need sign-off from A, B and C. Regenerate `event.schema.json` after any change:
 import json
 import re
 import uuid
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StrictBool,
+    model_validator,
+)
 
 from contracts.labels import Verdict
 
 SCHEMA_VERSION = "1.1"
 SCHEMA_PATH = Path(__file__).with_name("event.schema.json")
 
-ORGANIC_RUN_SEGMENT = "organic"
+ORGANIC_RUN_SEGMENT = "organic"  # reserved: stands in for run_id in organic evidence refs
 _EVIDENCE_REF = re.compile(r"^ev://(?P<customer_id>[^/]+)/(?P<run_id>[^/]+)/(?P<event_id>[^/]+)$")
+# ids are path segments of evidence_ref, so they can't be empty or contain "/"
+ID_SEGMENT_PATTERN = r"^[^/]+$"
+EVIDENCE_REF_PATTERN = r"^ev://[^/]+/[^/]+/[^/]+$"
+# RFC 3339 date-time with a mandatory offset; mirrored in the JSON Schema
+TS_PATTERN = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$"
+_TS = re.compile(TS_PATTERN)
 
 
 class Actor(StrEnum):
@@ -52,6 +67,19 @@ SWARM_PREFIX = "swarm."
 SCENARIO_SCOPED = {EventType.PROBE_RESULT, EventType.SWARM_PROBE, EventType.SWARM_VERDICT}
 
 
+def _check_ts(value: Any) -> Any:
+    """Accept datetimes and RFC 3339 strings only; no epoch numbers or loose formats."""
+    if isinstance(value, str):
+        if not _TS.match(value):
+            raise ValueError("ts must be RFC 3339 with a timezone, e.g. 2026-10-11T12:00:00Z")
+    elif not isinstance(value, datetime):
+        raise ValueError("ts must be a datetime or an RFC 3339 string")
+    return value
+
+
+Timestamp = Annotated[AwareDatetime, BeforeValidator(_check_ts)]
+
+
 def new_event_id() -> str:
     return str(uuid.uuid4())
 
@@ -73,11 +101,17 @@ class Event(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, use_enum_values=True)
 
     # --- v1 ---
-    event_id: str = Field(default_factory=new_event_id, description="Primary key (uuid)")
+    event_id: str = Field(
+        default_factory=new_event_id,
+        pattern=ID_SEGMENT_PATTERN,
+        description="Primary key; non-empty, no '/'. Defaults to a uuid4",
+    )
     customer_id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$", description="Tenant scope")
-    ts: AwareDatetime = Field(description="Event time, timezone-aware ISO-8601")
+    ts: Timestamp = Field(description="Event time, RFC 3339 with timezone")
     run_id: str | None = Field(
-        default=None, description="Groups events from one run; null for organic events"
+        default=None,
+        pattern=ID_SEGMENT_PATTERN,
+        description="Groups events from one run; null for organic events. No '/', not 'organic'",
     )
     actor: Actor
     tool: str | None = Field(default=None, description="Tool/agent identity, if any")
@@ -90,9 +124,11 @@ class Event(BaseModel):
     knowledge_version: str | None = Field(
         default=None, description="Version of shared-intelligence.md in play"
     )
-    simulated: bool = Field(description="True for anything the attack engine produces")
+    simulated: StrictBool = Field(description="True for anything the attack engine produces")
     evidence_ref: str | None = Field(
-        default=None, description="ev://<customer_id>/<run_id|organic>/<event_id>"
+        default=None,
+        pattern=EVIDENCE_REF_PATTERN,
+        description="ev://<customer_id>/<run_id|organic>/<event_id>",
     )
 
     # --- v1.1 ---
@@ -105,6 +141,9 @@ class Event(BaseModel):
     @model_validator(mode="after")
     def _check_contract(self) -> "Event":
         et = self.event_type
+
+        if self.run_id == ORGANIC_RUN_SEGMENT:
+            raise ValueError(f"run_id {ORGANIC_RUN_SEGMENT!r} is reserved")
         is_swarm = et.startswith(SWARM_PREFIX)
         is_probe_result = et == EventType.PROBE_RESULT
 
@@ -142,9 +181,65 @@ class Event(BaseModel):
         return self
 
 
+def _when(
+    event_type_schema: dict[str, Any], then: dict[str, Any], otherwise: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    rule = {
+        "if": {"properties": {"event_type": event_type_schema}, "required": ["event_type"]},
+        "then": then,
+    }
+    if otherwise is not None:
+        rule["else"] = otherwise
+    return rule
+
+
+def _run_scoped(actor: Actor, **extra_props: Any) -> dict[str, Any]:
+    """probe.result and swarm.*: simulated, with a run_id and an evidence_ref."""
+    return {
+        "properties": {
+            **extra_props,
+            "actor": {"const": actor.value},
+            "simulated": {"const": True},
+            "run_id": {"type": "string"},
+            "evidence_ref": {"type": "string"},
+        },
+        "required": ["run_id", "evidence_ref"],
+    }
+
+
+def _scenario_required() -> dict[str, Any]:
+    return {
+        "properties": {"scenario_id": {"type": "string", "minLength": 1}},
+        "required": ["scenario_id"],
+    }
+
+
 def json_schema() -> dict[str, Any]:
+    """JSON Schema for Event, including the cross-field rules of `Event._check_contract`.
+
+    One rule can't be expressed in JSON Schema and is enforced only by `Event`: evidence_ref
+    must name the event's own customer_id and run_id.
+    """
     schema = Event.model_json_schema()
     schema["$id"] = f"swarmshield/event/v{SCHEMA_VERSION}"
+    props = schema["properties"]
+    props["ts"]["pattern"] = TS_PATTERN
+    props["run_id"]["not"] = {"const": ORGANIC_RUN_SEGMENT}
+
+    swarm_types = sorted(e.value for e in EventType if e.value.startswith(SWARM_PREFIX))
+    schema["allOf"] = [
+        _when({"const": EventType.PROBE_RESULT.value}, _run_scoped(Actor.SYSTEM)),
+        _when(
+            {"pattern": rf"^{re.escape(SWARM_PREFIX)}"},
+            _run_scoped(Actor.SWARM_AGENT, event_type={"enum": swarm_types}),
+        ),
+        _when({"enum": sorted(e.value for e in SCENARIO_SCOPED)}, _scenario_required()),
+        _when(
+            {"const": EventType.SWARM_VERDICT.value},
+            {"properties": {"verdict": {"$ref": "#/$defs/Verdict"}}, "required": ["verdict"]},
+            otherwise={"properties": {"verdict": {"type": "null"}}},
+        ),
+    ]
     return schema
 
 
