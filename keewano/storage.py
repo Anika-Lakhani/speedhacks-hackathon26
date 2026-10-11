@@ -7,7 +7,7 @@ Pick one with `make_store(settings)`; callers never import an implementation dir
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any
+from typing import Any, NamedTuple
 
 from pydantic import BaseModel, ConfigDict
 
@@ -52,6 +52,13 @@ class Artifact(BaseModel):
     code_revision: str
 
 
+class Position(NamedTuple):
+    """Where an event sits in a tenant's order: (UTC ts key, ingest sequence)."""
+
+    ts: str
+    seq: int
+
+
 def tenant_of(evidence_ref: str) -> str:
     """customer_id named by an evidence_ref (raises ValueError if malformed)."""
     return parse_evidence_ref(evidence_ref)[0]
@@ -84,6 +91,26 @@ class EventStore(ABC):
         limit: int = 500,
     ) -> list[Event]:
         """One tenant's events, ordered by (ts, ingest order). since inclusive, until exclusive."""
+
+    @abstractmethod
+    def query_page(
+        self,
+        customer_id: str,
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        event_type: str | None = None,
+        run_id: str | None = None,
+        after: Position | None = None,
+        start: Position | None = None,
+        limit: int = 500,
+    ) -> list[tuple[Position, Event]]:
+        """Like query_events, with keyset paging: rows strictly after `after`, or from
+        `start` inclusive. Returns each event with its Position."""
+
+    @abstractmethod
+    def first_seen(self, customer_id: str, code_revision: str) -> Position | None:
+        """Position of the tenant's earliest event with this code_revision, or None."""
 
     @abstractmethod
     def put_artifact(self, evidence_ref: str, artifact: Artifact) -> None:

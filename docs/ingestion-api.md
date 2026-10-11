@@ -1,7 +1,6 @@
 # Event store: ingestion API, storage and artifacts (Dev B, M2)
 
-**Status:** M2 (ingestion and artifact upload). Reads (`GET /events`, `GET /evidence/{ref}`,
-since-revision) arrive in M3. **Code:** `keewano/`. **Contract:** `docs/event-schema.md`.
+**Status:** M2 (ingestion and artifact upload). Reads: `docs/read-api.md` (M3). **Code:** `keewano/`. **Contract:** `docs/event-schema.md`.
 
 ```sh
 uv run python -m keewano.setup                                   # create per-tenant tables (idempotent)
@@ -86,7 +85,7 @@ it when they answer a probe; anyone holding evidence for an event may call it.
 - **One artifacts table per tenant** (`artifacts_customer_a`, ...), next to that tenant's events table.
 - **Tenant-scoped reads:** `get_artifact(customer_id, evidence_ref)` returns nothing if the ref
   names another tenant, so a caller scoped to customer-b can't read customer-a's evidence even
-  with the exact ref. (HTTP `GET /evidence/{ref}` lands in M3 on top of this.)
+  with the exact ref. `GET /evidence/{ref}?customer_id=` (M3) is built on this.
 - **Write-once:** a second write for the same ref is refused (`409`).
 - **Not linked by foreign key to events:** an artifact may arrive before or after its event.
 - Contents are synthetic by the safety rule (demo sites only ever return fake data).

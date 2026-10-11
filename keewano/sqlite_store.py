@@ -7,6 +7,7 @@ injective and safe to splice into SQL; it's still checked and quoted here.
 
 import re
 import sqlite3
+import threading
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +18,7 @@ from keewano.storage import (
     ArtifactExists,
     DuplicateEvent,
     EventStore,
+    Position,
     UnknownTenant,
     tenant_of,
 )
@@ -51,15 +53,21 @@ class SQLiteStore(EventStore):
     def __init__(self, path: Path | str):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # One connection per store, serialized by a lock (FastAPI runs sync routes in threads).
+        self._conn = sqlite3.connect(self.path, check_same_thread=False)
+        # WAL + NORMAL: no fsync per commit (durable across app crashes, not power loss).
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
+        self._lock = threading.RLock()
+        self._tenants: set[str] | None = None
 
     @contextmanager
     def _db(self):
-        conn = sqlite3.connect(self.path)
-        try:
-            with conn:  # commit on success, roll back on error
-                yield conn
-        finally:
-            conn.close()
+        with self._lock, self._conn:  # commit on success, roll back on error
+            yield self._conn
+
+    def close(self) -> None:
+        self._conn.close()
 
     def setup(self, tenants: tuple[str, ...]) -> None:
         with self._db() as db:
@@ -90,13 +98,16 @@ class SQLiteStore(EventStore):
                     )"""
                 )
                 db.execute("INSERT OR IGNORE INTO tenants VALUES (?)", (cid,))
+        self._tenants = None
 
     def tenants(self) -> set[str]:
-        with self._db() as db:
-            try:
-                return {r[0] for r in db.execute("SELECT customer_id FROM tenants")}
-            except sqlite3.OperationalError:  # setup() never ran
-                return set()
+        if self._tenants is None:
+            with self._db() as db:
+                try:
+                    self._tenants = {r[0] for r in db.execute("SELECT customer_id FROM tenants")}
+                except sqlite3.OperationalError:  # setup() never ran
+                    return set()
+        return set(self._tenants)
 
     def _require(self, customer_id: str) -> None:
         if customer_id not in self.tenants():
@@ -135,6 +146,28 @@ class SQLiteStore(EventStore):
         run_id: str | None = None,
         limit: int = 500,
     ) -> list[Event]:
+        rows = self.query_page(
+            customer_id,
+            since=since,
+            until=until,
+            event_type=event_type,
+            run_id=run_id,
+            limit=limit,
+        )
+        return [e for _, e in rows]
+
+    def query_page(
+        self,
+        customer_id: str,
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        event_type: str | None = None,
+        run_id: str | None = None,
+        after: Position | None = None,
+        start: Position | None = None,
+        limit: int = 500,
+    ) -> list[tuple[Position, Event]]:
         self._require(customer_id)
         where, params = [], []
         if since is not None:
@@ -149,13 +182,32 @@ class SQLiteStore(EventStore):
         if run_id is not None:
             where.append("run_id = ?")
             params.append(run_id)
-        sql = f"SELECT body FROM {_events_table(customer_id)}"
+        if after is not None:
+            where.append("(ts > ? OR (ts = ? AND seq > ?))")
+            params += [after.ts, after.ts, after.seq]
+        if start is not None:
+            where.append("(ts > ? OR (ts = ? AND seq >= ?))")
+            params += [start.ts, start.ts, start.seq]
+        sql = f"SELECT ts, seq, body FROM {_events_table(customer_id)}"
         if where:
             sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY ts, seq LIMIT ?"
         params.append(max(0, limit))
         with self._db() as db:
-            return [Event.model_validate_json(r[0]) for r in db.execute(sql, params)]
+            return [
+                (Position(ts, seq), Event.model_validate_json(body))
+                for ts, seq, body in db.execute(sql, params)
+            ]
+
+    def first_seen(self, customer_id: str, code_revision: str) -> Position | None:
+        self._require(customer_id)
+        with self._db() as db:
+            row = db.execute(
+                f"""SELECT ts, seq FROM {_events_table(customer_id)}
+                    WHERE code_revision = ? ORDER BY ts, seq LIMIT 1""",
+                (code_revision,),
+            ).fetchone()
+        return Position(*row) if row else None
 
     def put_artifact(self, evidence_ref: str, artifact: Artifact) -> None:
         customer_id = tenant_of(evidence_ref)
