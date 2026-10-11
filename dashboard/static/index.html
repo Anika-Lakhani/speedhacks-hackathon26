@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SwarmShield dashboard</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+<header><h1>SwarmShield</h1><span class="muted">Pick a customer</span><a href="#shared" id="shared-link">Shared intelligence</a></header>
+<main>
+  <div class="grid" id="customers"></div>
+  <section class="card wide md" id="shared" hidden></section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script type="module">
+import { el, api, pill, sourceBadge, renderMarkdown } from "/static/common.js";
+const grid = document.getElementById("customers");
+for (const c of await api("/api/customers")) {
+  grid.append(el("a", { href: `/customer/${c.customer_id}`, style: "text-decoration:none;color:inherit" },
+    el("div", { class: "card" },
+      el("h2", {}, c.customer_id), el("div", { class: "muted" }, c.app_type),
+      el("div", {}, pill(c.site_up ? "site up" : "site not running"), " ", sourceBadge(c.source)),
+      el("div", { class: "muted" }, `revision: ${c.code_revision ?? "n/a"}`))));
+}
+const s = await api("/api/shared"), box = document.getElementById("shared");
+renderMarkdown(box, s.markdown);
+document.getElementById("shared-link").onclick = () => { box.hidden = false; };
+</script></body></html>

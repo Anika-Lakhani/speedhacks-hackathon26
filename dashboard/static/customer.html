@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Customer · SwarmShield</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+<header><a href="/">← All customers</a><h1 id="title"></h1><span id="meta" class="muted"></span>
+<span id="status" class="muted"></span></header>
+<main>
+<div id="banner" class="banner" hidden></div>
+<div class="grid">
+  <section class="card wide" id="runform" hidden>
+    <h2>Run a test cycle</h2>
+    <div class="form">
+      <label>Objective
+        <select id="obj-preset">
+          <option>Test recently changed surfaces for regressions</option>
+          <option>Full sweep of known weaknesses</option>
+          <option>Focus on authentication and access control</option>
+          <option value="__custom">Custom…</option>
+        </select>
+        <input id="obj-text" type="text" placeholder="custom objective" hidden>
+      </label>
+      <label>What changed? (paths, comma-separated)
+        <input id="changed" type="text" placeholder="/orders, /login"></label>
+      <label>Diff summary
+        <textarea id="diff" rows="2" placeholder="e.g. refactored the order lookup"></textarea></label>
+      <label>Code to analyze (optional)
+        <textarea id="code" rows="4" placeholder="paste source to focus the planner/generator"></textarea>
+        <span class="muted">Credentials are masked before Gemini sees them.</span></label>
+      <label>Let Gemini invent new tests: <output id="gen-out">0</output>
+        <input id="gen" type="range" min="0" max="5" value="0"></label>
+      <details>
+        <summary>Advanced</summary>
+        <label><input type="checkbox" id="offline"> Offline mode (deterministic, no Gemini)</label>
+        <label><input type="checkbox" id="auto" checked> Auto-approve confirmed findings</label>
+        <label>Max scenarios <input id="maxscn" type="number" value="12" min="1" max="50"></label>
+        <label>Max runtime (s) <input id="maxrt" type="number" value="120" min="1" max="600"></label>
+      </details>
+      <div><button id="run" data-act="run">Run tests</button>
+        <span id="progress" class="muted"></span></div>
+    </div>
+  </section>
+  <section class="card" id="flags"><h2>Flags</h2></section>
+  <section class="card" id="vulns"><h2>Vulnerabilities</h2></section>
+  <section class="card wide" id="plan" hidden><h2>Plan</h2></section>
+  <section class="card wide" id="verdicts" hidden><h2>Verdicts</h2></section>
+  <section class="card wide" id="generated" hidden><h2>Generated tests (review)</h2></section>
+  <section class="card wide" id="approvals" hidden><h2>Approvals</h2></section>
+  <section class="card wide" id="runs"><h2>Runs</h2></section>
+  <section class="card wide md" id="memory"></section>
+</div></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script type="module">
+import { el, api, post, pill, sourceBadge, table, renderMarkdown } from "/static/common.js";
+const id = location.pathname.split("/").pop(), base = `/api/customer/${id}`;
+const $ = x => document.getElementById(x);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+$("title").textContent = id;
+document.title = `${id} · SwarmShield`;
+
+const canWrite = (await api("/api/features").catch(() => ({}))).write === true;
+let busy = false;
+const setStatus = t => { $("status").textContent = t; };
+const setButtons = d => document.querySelectorAll("button[data-act]").forEach(b => b.disabled = d);
+const show = (secId, on = true) => { $(secId).hidden = !on; };
+
+// ---- run form -------------------------------------------------------------------------
+if (canWrite) {
+  show("runform");
+  $("obj-preset").onchange = e => { $("obj-text").hidden = e.target.value !== "__custom"; };
+  $("gen").oninput = e => { $("gen-out").textContent = e.target.value; };
+  $("run").onclick = doRun;
+}
+function options() {
+  const preset = $("obj-preset").value;
+  return {
+    objective: preset === "__custom" ? $("obj-text").value : preset,
+    changed_surfaces: $("changed").value.split(",").map(s => s.trim()).filter(Boolean),
+    diff_summary: $("diff").value,
+    code_context: $("code").value.trim() ? { "pasted.txt": $("code").value } : {},
+    generate_max: Number($("gen").value),
+    offline: $("offline").checked,
+    auto_approve: $("auto").checked,
+    max_scenarios: Number($("maxscn").value),
+    max_runtime_s: Number($("maxrt").value),
+  };
+}
+async function doRun() {
+  if (busy) return;
+  busy = true; setButtons(true); setStatus(""); $("progress").textContent = "starting…";
+  try {
+    const { run_id } = await post(`${base}/run`, options());
+    await pollRun(run_id);
+  } catch (e) { $("progress").textContent = `run failed: ${e.message}`; }
+  finally { busy = false; setButtons(false); }
+}
+async function pollRun(run_id) {
+  for (;;) {
+    const st = await api(`/api/run/${run_id}`);
+    const prog = st.planned == null ? "" : ` · ${st.probed}/${st.planned} probed`;
+    $("progress").textContent = `${st.stage}${prog}`;
+    if (st.status === "done" || st.status === "error") { renderReport(st); await refresh(); return; }
+    await sleep(1000);
+  }
+}
+
+// ---- report rendering -----------------------------------------------------------------
+function renderBanner(report, extra) {
+  const msgs = [];
+  if (extra) msgs.push(extra);
+  if (report?.plan?.degraded) msgs.push(`Planner degraded to offline fallback: ${report.plan.error || "unknown error"}`);
+  if (report?.generation?.degraded) msgs.push(`Generator failed: ${report.generation.error || "unknown error"}`);
+  const b = $("banner");
+  b.hidden = msgs.length === 0;
+  b.textContent = msgs.join("\n");
+}
+const PLAIN = {
+  inconclusive: "the test ran but the response didn't look like what was predicted",
+  blocked: "the test could not run (precondition unmet or target out of scope)",
+};
+function renderReport(st) {
+  const report = st.report;
+  renderBanner(report, st.status === "error" ? `Run errored: ${st.error}` : null);
+  if (!report) { show("plan", false); show("verdicts", false); return; }
+  const genIds = new Set((report.generation?.accepted || []).map(a => a.id));
+  show("plan");
+  $("plan").replaceChildren(el("h2", {}, "Plan"), table([
+    { label: "Scenario", render: s => s.scenario_id },
+    { label: "Source", render: s => pill(genIds.has(s.scenario_id) ? "generated" : "curated") },
+    { label: "Priority", render: s => s.priority },
+    { label: "Rationale", render: s => s.rationale },
+  ], report.plan.steps, "No scenarios planned."));
+  show("verdicts");
+  $("verdicts").replaceChildren(el("h2", {}, "Verdicts"), table([
+    { label: "Scenario", render: o => o.scenario_id },
+    { label: "Verdict", render: o => pill(o.verdict, o.verdict) },
+    { label: "Confidence", render: o => o.confidence?.toFixed?.(2) ?? "" },
+    { label: "Evidence", render: o => o.evidence_label },
+    { label: "Notes", render: o => el("span", { title: o.notes || "" }, PLAIN[o.verdict] || o.notes || "") },
+  ], report.outcomes, "No verdicts."), footer(report));
+}
+function footer(report) {
+  const u = report.budget_usage || {};
+  const parts = [`stop: ${report.stop_reason}`,
+    `spend $${u.spend_usd ?? 0}`, `${u.runtime_s ?? 0}s`, `${u.tool_calls ?? 0} calls`];
+  if (report.warnings?.length) parts.push(`warnings: ${report.warnings.join("; ")}`);
+  return el("div", { class: "footer" }, parts.join("  ·  "));
+}
+
+// ---- review gates ---------------------------------------------------------------------
+async function loadGates() {
+  if (!canWrite) return;
+  const [gen, appr] = await Promise.all([api(`${base}/generated`), api(`${base}/approvals`)]);
+  const genRows = gen.generated;
+  show("generated", genRows.length > 0);
+  if (genRows.length) {
+    $("generated").replaceChildren(el("h2", {}, "Generated tests (review)"), table([
+      { label: "ID", render: g => g.id },
+      { label: "Title", render: g => g.title },
+      { label: "Runs", render: g => `${g.runs} (${g.last_verdict ?? "-"})` },
+      { label: "Status", render: g => pill(g.status) },
+      { label: "", render: g => g.status === "pending"
+        ? el("span", {},
+            gateBtn("Promote", g.runs === 0, () => gate(`${base}/generated/promote`, g.id)),
+            " ", gateBtn("Reject", false, () => gate(`${base}/generated/reject`, g.id)))
+        : "" },
+    ], genRows, ""));
+  }
+  const pend = appr.approvals;
+  show("approvals", pend.length > 0);
+  if (pend.length) {
+    $("approvals").replaceChildren(el("h2", {}, "Approvals"), table([
+      { label: "Scenario", render: a => a.scenario_id },
+      { label: "Run", render: a => a.run_id },
+      { label: "", render: a => gateBtn("Approve", false, () =>
+          act(() => post(`${base}/approvals/approve`, { run_id: a.run_id, scenario_id: a.scenario_id }))) },
+    ], pend, ""));
+  }
+}
+function gateBtn(label, disabled, fn) {
+  return el("button", { class: "mini", "data-act": "gate", disabled, onclick: fn }, label);
+}
+function gate(path, scenario_id) { return act(() => post(path, { scenario_id })); }
+async function act(fn) {
+  if (busy) return;
+  busy = true; setButtons(true);
+  try { await fn(); await refresh(); }
+  catch (e) { setStatus(`failed: ${e.message}`); }
+  finally { busy = false; setButtons(false); }
+}
+
+// ---- flags, vulns, runs (ambient) -----------------------------------------------------
+function fill(sectionId, heading, source, note, ...content) {
+  const s = $(sectionId);
+  s.classList.toggle("ph", source !== "live");
+  s.replaceChildren(el("h2", {}, heading, " ", sourceBadge(source, note)), ...content);
+}
+function flagState(f) {
+  if (!canWrite) return el("span", { class: f.on ? "on" : "off" }, f.on ? "ON" : "off");
+  return el("button", { class: `mini ${f.on ? "on" : "off"}`, "data-act": "flag",
+    onclick: () => act(() => fetch(`${base}/flags`, { method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ flags: { [f.flag]: !f.on } }) }).then(r => { if (!r.ok) throw new Error(r.status); })) },
+    f.on ? "ON" : "off");
+}
+function fixButton(v) {
+  return el("button", { class: "mini", "data-act": "fix", onclick: () => act(async () => {
+    const r = await post(`${base}/fix`, { scenario_id: v.scenario_id });
+    setStatus(r.fixed
+      ? `fixed ${v.scenario_id}: disabled ${r.flag} → ${r.verdict} @ ${r.code_revision}`
+      : `fix did not hold for ${v.scenario_id}: ${r.verdict}`);
+  }) }, "Fix");
+}
+async function refresh() {
+  const [flags, vulns, runs] = await Promise.all([api(`${base}/flags`), api(`${base}/vulnerabilities`), api(`${base}/runs`)]);
+  $("meta").textContent = `revision: ${flags.code_revision ?? "n/a"}`;
+  const flagHead = [el("h2", {}, "Flags ", sourceBadge(flags.source))];
+  if (canWrite) flagHead.push(" ", el("button", { class: "mini", "data-act": "reset",
+    onclick: () => act(() => post(`${base}/reset`)) }, "Reset demo"));
+  $("flags").classList.toggle("ph", flags.source !== "live");
+  $("flags").replaceChildren(...flagHead, table([
+    { label: "Flag", render: f => f.flag },
+    { label: "State", render: flagState },
+    { label: "Scenarios", render: f => f.scenario_ids.join(", ") },
+  ], flags.flags, "No flags registered."));
+  const vulnCols = [
+    { label: "Scenario", render: v => v.scenario_id },
+    { label: "Flag", render: v => v.flag ?? "" },
+    { label: "Run", render: v => v.run_id },
+    { label: "Evidence", render: v => v.evidence_ref ?? "" },
+  ];
+  if (canWrite) vulnCols.push({ label: "Action", render: v => fixButton(v) });
+  fill("vulns", "Vulnerabilities", vulns.source, vulns.note, table(vulnCols,
+    vulns.vulnerabilities, vulns.source === "live" ? "No confirmed vulnerabilities." : "Waiting for the event store."));
+  fill("runs", "Runs", runs.source, runs.note, table([
+    { label: "Run", render: r => r.run_id },
+    { label: "Started", render: r => r.started },
+    { label: "Status", render: r => pill(r.status) },
+    { label: "Verdicts", render: r => Object.entries(r.verdict_counts).map(([v, n]) => pill(`${v} ${n}`, v)) },
+  ], runs.runs, runs.source === "live" ? "No runs yet." : "Waiting for the event store."));
+  await loadGates();
+}
+async function loadMemory() {
+  const m = await api(`${base}/memory`), s = $("memory");
+  s.classList.toggle("ph", m.source !== "live");
+  const body = el("div"); renderMarkdown(body, m.markdown);
+  s.replaceChildren(el("h2", {}, `Memory (${id}.md) `, sourceBadge(m.source)), body);
+}
+await Promise.all([refresh(), loadMemory()]);
+setInterval(() => { if (!busy) refresh().catch(() => {}); }, 2000);
+</script></body></html>

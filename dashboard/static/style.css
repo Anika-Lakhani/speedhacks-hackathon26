@@ -1,0 +1,23 @@
+:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--card:#f9fafb;--red:#dc2626;--green:#16a34a;--amber:#d97706;--grey:#6b7280;--accent:#2563eb}
+@media (prefers-color-scheme:dark){:root{--bg:#111318;--fg:#e8eaed;--muted:#9aa0a6;--line:#2a2e37;--card:#181b22;--accent:#6ea8fe}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
+header,main{max-width:1100px;margin:0 auto;padding:16px}header{display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+a{color:var(--accent)}h1{font-size:20px;margin:0}h2{font-size:16px;margin:0 0 8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto}
+.wide{grid-column:1/-1}table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line)}
+.muted{color:var(--muted)}.pill{display:inline-block;padding:0 8px;border-radius:99px;font-size:12px;border:1px solid var(--line)}
+.confirmed{background:var(--red);color:#fff}.not_reproduced{background:var(--green);color:#fff}.inconclusive{background:var(--amber);color:#fff}.blocked{background:var(--grey);color:#fff}
+.on{color:var(--red);font-weight:600}.off{color:var(--green)}.ph{border-style:dashed}
+.md pre{overflow:auto}.md h1{font-size:18px}.md h2{font-size:15px}code{font-size:13px}
+.banner{background:var(--red);color:#fff;border-radius:8px;padding:10px 14px;margin:0 0 16px;white-space:pre-wrap}
+.form{display:grid;gap:10px;max-width:640px}.form label{display:grid;gap:4px;font-size:14px}
+.form input,.form select,.form textarea{font:inherit;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
+.form details label{display:flex;gap:6px;align-items:center;margin:4px 0}
+.form input[type=checkbox],.form input[type=range]{width:auto;padding:0}
+button{font:inherit;padding:5px 12px;border:1px solid var(--line);border-radius:6px;background:var(--accent);color:#fff;cursor:pointer}
+button[disabled]{opacity:.5;cursor:default}
+button.mini{padding:1px 8px;font-size:12px;background:transparent;border:1px solid var(--line)}
+button.mini.on{color:var(--red);font-weight:600}button.mini.off{color:var(--green)}
+.footer{font-size:13px;color:var(--muted);margin-top:8px}
+@media (max-width:600px){header,main{padding:12px}}

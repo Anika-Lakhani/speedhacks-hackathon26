@@ -2,6 +2,7 @@
 
 import json
 import re
+import threading
 from collections.abc import Callable
 from typing import Any
 
@@ -110,12 +111,15 @@ class FakeKeewano:
     def __init__(self) -> None:
         self.events: list[Event] = []
         self.evidence: dict[str, dict[str, Any]] = {}
+        # A background run appends while a dashboard poll reads; guard both (snapshot on read).
+        self._lock = threading.Lock()
 
     def post_events(self, events: list[Event]) -> dict[str, Any]:
         # Round-trip through JSON so anything unserialisable fails like the real API would.
         for e in events:
             json.dumps(e.model_dump(mode="json"))
-        self.events.extend(events)
+        with self._lock:
+            self.events.extend(events)
         return {"accepted": [e.event_id for e in events], "rejected": []}
 
     def get_slice(
@@ -126,7 +130,8 @@ class FakeKeewano:
         run_id: str | None = None,
         limit: int = 500,
     ) -> list[dict[str, Any]]:
-        out = [e for e in self.events if e.customer_id == customer_id]
+        with self._lock:
+            out = [e for e in self.events if e.customer_id == customer_id]
         if since:
             out = [e for e in out if e.ts.isoformat() >= since]
         if event_type:
@@ -136,7 +141,9 @@ class FakeKeewano:
         return [e.model_dump(mode="json") for e in out[:limit]]
 
     def store_evidence(self, ref: str, record: dict[str, Any]) -> None:
-        self.evidence[ref] = record
+        with self._lock:
+            self.evidence[ref] = record
 
     def get_evidence(self, evidence_ref: str) -> dict[str, Any]:
-        return self.evidence[evidence_ref]
+        with self._lock:
+            return self.evidence[evidence_ref]
