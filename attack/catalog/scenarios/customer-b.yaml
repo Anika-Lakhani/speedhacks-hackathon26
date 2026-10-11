@@ -1,0 +1,50 @@
+- id: SCN-BOLA-001
+  title: Account object readable by another tenant user
+  customer_id: customer-b
+  weakness_class: bola
+  invariant: "A user can only read accounts they own"
+  flag: broken_object_authz
+  preconditions: ["authenticated session"]
+  probe:
+    kind: benign_request
+    method: GET
+    path: "/api/accounts/{other_account_id}"
+    params: { other_account_id: "fixture:other_account" }
+  expected_signal:
+    status: 200
+    body_contains: ["account_id", "owner_user_id"]
+    owner_is_other: true
+  severity: high
+
+- id: SCN-AUTHZ-001
+  title: Admin user list reachable by a non-admin role
+  customer_id: customer-b
+  weakness_class: missing_authz
+  invariant: "Only admin roles can list users"
+  flag: role_escalation
+  preconditions: ["authenticated non-admin session"]
+  probe:
+    kind: benign_request
+    method: GET
+    path: "/admin/users"
+  expected_signal:
+    status: 200
+    body_contains: ["users"]
+  severity: critical
+
+- id: SCN-SSRF-001
+  title: Webhook test endpoint fetches an internal-shaped URL
+  customer_id: customer-b
+  weakness_class: ssrf
+  invariant: "Server-side callbacks never target internal or non-allowlisted hosts"
+  flag: ssrf_callback
+  preconditions: ["authenticated session"]
+  probe:
+    kind: benign_request
+    method: GET
+    path: "/api/webhooks/test"
+    params: { callback_url: "fixture:internal_marker_url" }
+  expected_signal:
+    status: 200
+    body_contains: ["callback_fetched"]
+  severity: high

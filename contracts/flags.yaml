@@ -1,0 +1,47 @@
+# PROVISIONAL flag registry. Dev B owns this file (dev-B §4a.3); this stand-in was written
+# by Dev A from the flag names in the spec so the catalog can validate. Replace with B's.
+- flag: idor_orders
+  customer_id: customer-a
+  default: false
+  endpoints: ["/orders/{id}"]
+  scenario_ids: ["SCN-IDOR-001"]
+- flag: login_rate_limit_off
+  customer_id: customer-a
+  default: false
+  endpoints: ["/login", "/login/verify-otp"]
+  scenario_ids: ["SCN-RATE-001", "SCN-RATE-002"]
+- flag: weak_password_reset
+  customer_id: customer-a
+  default: false
+  endpoints: ["/password-reset/confirm"]
+  scenario_ids: ["SCN-RESET-001"]
+- flag: broken_object_authz
+  customer_id: customer-b
+  default: false
+  endpoints: ["/api/accounts/{id}"]
+  scenario_ids: ["SCN-BOLA-001"]
+- flag: role_escalation
+  customer_id: customer-b
+  default: false
+  endpoints: ["/admin/users"]
+  scenario_ids: ["SCN-AUTHZ-001"]
+- flag: ssrf_callback
+  customer_id: customer-b
+  default: false
+  endpoints: ["/api/webhooks/test"]
+  scenario_ids: ["SCN-SSRF-001"]
+- flag: unsafe_input_handling
+  customer_id: customer-c
+  default: false
+  endpoints: ["/search"]
+  scenario_ids: ["SCN-INJ-001"]
+- flag: missing_output_encoding
+  customer_id: customer-c
+  default: false
+  endpoints: ["/comments/preview"]
+  scenario_ids: ["SCN-XSS-001"]
+- flag: insecure_upload_path
+  customer_id: customer-c
+  default: false
+  endpoints: ["/uploads"]
+  scenario_ids: ["SCN-UPLOAD-001"]

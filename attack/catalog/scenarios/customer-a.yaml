@@ -1,0 +1,70 @@
+- id: SCN-IDOR-001
+  title: Horizontal IDOR on order detail
+  customer_id: customer-a
+  weakness_class: idor
+  invariant: "A user can only read their own orders"
+  flag: idor_orders
+  preconditions: ["authenticated session", "flag:idor_orders == on"]
+  probe:
+    kind: benign_request
+    method: GET
+    path: "/orders/{other_user_order_id}"
+    params: { other_user_order_id: "fixture:other_order" }
+  expected_signal:
+    status: 200
+    body_contains: ["order_id", "owner_user_id"]
+    owner_is_other: true
+  severity: high
+
+- id: SCN-RATE-001
+  title: Login endpoint has no attempt throttling
+  customer_id: customer-a
+  weakness_class: missing_rate_limit
+  invariant: "Repeated failed logins for one account are throttled"
+  flag: login_rate_limit_off
+  preconditions: ["synthetic account exists"]
+  probe:
+    kind: benign_request
+    method: POST
+    path: "/login"
+    params: { username: "fixture:synthetic_user", password: "fixture:wrong_password" }
+  expected_signal:
+    status: 401
+    body_contains: ["invalid_credentials"]
+    header_absent: ["X-RateLimit-Limit"]
+  severity: high
+
+- id: SCN-RATE-002
+  title: One-time-code verification has no attempt throttling
+  customer_id: customer-a
+  weakness_class: missing_rate_limit
+  invariant: "One-time-code guesses are rate limited per account"
+  flag: login_rate_limit_off
+  preconditions: ["synthetic account exists"]
+  probe:
+    kind: benign_request
+    method: POST
+    path: "/login/verify-otp"
+    params: { username: "fixture:synthetic_user", code: "fixture:wrong_otp" }
+  expected_signal:
+    status: 401
+    body_contains: ["invalid_code"]
+    header_absent: ["X-RateLimit-Limit"]
+  severity: high
+
+- id: SCN-RESET-001
+  title: Password reset accepts a guessable token
+  customer_id: customer-a
+  weakness_class: weak_reset_flow
+  invariant: "A password reset requires an unguessable, single-use token"
+  flag: weak_password_reset
+  preconditions: ["synthetic account exists"]
+  probe:
+    kind: benign_request
+    method: POST
+    path: "/password-reset/confirm"
+    params: { username: "fixture:synthetic_user", token: "fixture:guessable_token" }
+  expected_signal:
+    status: 200
+    body_contains: ["reset_token_accepted"]
+  severity: critical

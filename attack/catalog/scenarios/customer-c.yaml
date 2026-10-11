@@ -1,0 +1,50 @@
+- id: SCN-INJ-001
+  title: Search input reaches the query layer unsanitised
+  customer_id: customer-c
+  weakness_class: injection
+  invariant: "User input is never interpreted as query syntax"
+  flag: unsafe_input_handling
+  preconditions: []
+  probe:
+    kind: benign_request
+    method: GET
+    path: "/search"
+    params: { q: "fixture:injection_marker" }
+  expected_signal:
+    status: 500
+    body_contains: ["query_error"]
+  severity: high
+
+- id: SCN-XSS-001
+  title: Comment preview reflects markup unencoded
+  customer_id: customer-c
+  weakness_class: output_encoding
+  invariant: "User-supplied markup is always encoded on output"
+  flag: missing_output_encoding
+  preconditions: []
+  probe:
+    kind: benign_request
+    method: GET
+    path: "/comments/preview"
+    params: { text: "fixture:markup_marker" }
+  expected_signal:
+    status: 200
+    body_contains: ["<swarm-marker>"]
+  severity: medium
+
+- id: SCN-UPLOAD-001
+  title: Upload filename controls the storage path
+  customer_id: customer-c
+  weakness_class: path_traversal
+  invariant: "Uploaded files are stored under server-chosen names inside the upload root"
+  flag: insecure_upload_path
+  preconditions: ["authenticated session"]
+  probe:
+    kind: benign_request
+    method: POST
+    path: "/uploads"
+    params: { filename: "fixture:traversal_name", content: "fixture:benign_content" }
+  expected_signal:
+    status: 201
+    body_contains: ["stored_at", "../"]
+  severity: high
