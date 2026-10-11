@@ -283,3 +283,110 @@ in memory and serves slices.
 `tests/attack/`: catalog validation; verifier decision table (all six cells);
 budget-halt; evidence replay determinism; planner output schema + unknown-ID rejection;
 end-to-end on `FakeSite`+`FakeKeewano` producing schema-valid events.
+
+---
+
+## 11. Project context for implementers
+
+Everything an implementer needs that isn't in this file lives in `docs/`. Read
+`docs/swarmshield-mvp-overview.md` (§5 contracts, §5.6 safety model) and
+`docs/dev-A-simulation-core-and-attack-engine.md` first. This section is the quick orientation.
+
+### What SwarmShield is
+A self-improving security-testing loop over 3 **simulated** demo customers (fake sites we
+own). B produces events into a per-tenant store (Keewano); C distills events into per-customer
+memory (`customer-X.md`) and a generalized `shared-intelligence.md`; A (this component) reads
+that memory, runs simulated tests against the sites, and logs results back for C to re-distill.
+The branch is `feat/ato-response`; it is also the repo's default branch.
+
+### Repo layout (you own `attack/`)
+```
+contracts/   SHARED. Event schema + verdict/label enums. Import from here; do not fork it.
+fixtures/    Sample events (events/<customer_id>.jsonl) for building without B live.
+sites/       Dev B — 3 demo sites, customer_a/_b/_c (ports 3001/3002/3003), local only.
+keewano/     Dev B — event store + read API (port 4000).
+attack/      Dev A — THIS component (catalog/ agent/ engine/ verify/ harness/ clients/).
+distill/     Dev C — customer analysis, shared updater, privacy.
+memory/      Dev C — customers/customer-X.md and shared-intelligence.md.
+docs/        All specs.
+tests/       Pytest. Put A's tests under tests/attack/.
+```
+
+### Tooling
+- Python **3.12+**, managed with **uv**. `uv sync` installs; `uv run pytest -q` tests;
+  `uv run ruff check .` and `uv run ruff format .` lint/format. Add deps with `uv add <pkg>`.
+- Installed already: `anthropic`, `fastapi`, `uvicorn`, `httpx`, `pydantic` (v2), `pyyaml`.
+- Ruff config: line length 100, rules E/F/I/B/UP. Keep the tree green before committing.
+
+### The `contracts` API (already built — use it, don't redefine events)
+```python
+from contracts import (
+    Event,            # pydantic model for every Keewano event (§5.1 v1.1)
+    Actor,            # USER | SYSTEM | SWARM_AGENT
+    EventType,        # PROBE_RESULT, SWARM_RUN_START/PLAN/PROBE/VERDICT/RUN_END
+    PolicyOutcome,    # ALLOW | DENY | FLAG
+    Verdict,          # CONFIRMED | NOT_REPRODUCED | INCONCLUSIVE | BLOCKED
+    EvidenceLabel,    # OBSERVED | HYPOTHESIZED | REPRODUCED | VERIFIED
+    make_evidence_ref, parse_evidence_ref, new_event_id,
+)
+```
+`Event` is frozen, forbids unknown fields, and enforces the cross-field rules this spec
+relies on, so building an event wrong raises `ValidationError` immediately:
+- `swarm.*` ⇒ `actor=swarm_agent`; `probe.result` ⇒ `actor=system`.
+- `swarm.*` and `probe.result` ⇒ `simulated=True` + a `run_id` + an `evidence_ref`.
+- `scenario_id` required on `probe.result`, `swarm.probe`, `swarm.verdict`.
+- `verdict` required on `swarm.verdict`, forbidden elsewhere.
+- `evidence_ref` must name the event's own `customer_id` and `run_id`.
+- `ts` must be timezone-aware.
+Evidence-ref format: `ev://<customer_id>/<run_id>/<event_id>`; organic (non-run) events use
+the literal `organic` in place of `run_id`. A non-Python mirror is `contracts/event.schema.json`
+(field types only); regenerate it with `uv run python -m contracts` after changing `events.py`.
+
+Minimal example of a verdict event A emits:
+```python
+from datetime import datetime, UTC
+from contracts import Event, make_evidence_ref, new_event_id
+eid = new_event_id()
+ev = Event(
+    event_id=eid, customer_id="customer-a", ts=datetime.now(UTC), run_id="run-1",
+    actor="swarm_agent", tool="attack-harness", event_type="swarm.verdict",
+    target="/orders/{id}", action="probe", policy_outcome="flag",
+    code_revision="abc123", knowledge_version="0.1.0", simulated=True,
+    evidence_ref=make_evidence_ref("customer-a", "run-1", eid),
+    scenario_id="SCN-IDOR-001", verdict="confirmed", attrs={"confidence": 0.9},
+)
+```
+
+### Cross-team interface facts (from dev-B §4a — proposed by A, pending B sign-off)
+- Site base URLs: customer-a `:3001`, customer-b `:3002`, customer-c `:3003`.
+- Each site: `GET /__meta` → `{customer_id, code_revision, flags}`; `PUT /__flags` (test-only).
+- Probe headers A sends: `X-SwarmShield-Probe: <scenario_id>`, `X-SwarmShield-Run: <run_id>`.
+  Response echoes `X-SwarmShield-Evidence: <evidence_ref>`.
+- Keewano API (`:4000`): `POST /events` (array), `GET /events?customer_id=&since=&until=&event_type=&run_id=&limit=`,
+  `GET /events/since-revision?customer_id=&revision=`, `GET /evidence/{evidence_ref}`.
+- Flag registry at `contracts/flags.yaml` (B owns; B ships at M1). Initial flag names:
+  customer-a `idor_orders`, `login_rate_limit_off`, `weak_password_reset`;
+  customer-b `broken_object_authz`, `role_escalation`, `ssrf_callback`;
+  customer-c `unsafe_input_handling`, `missing_output_encoding`, `insecure_upload_path`.
+- `customer_id` values keep hyphens (`customer-a`); only the site *directory* names use
+  underscores (`customer_a`) so they import as Python packages.
+
+### Build against fakes first
+B and C may not be live when you build. Everything in §7 (`FakeSite`, `FakeKeewano`) and the
+`DummyPlanner` (§2) exist so A's full pipeline runs offline and in CI. Swap in real clients at
+integration. Build order is §8; don't wait on anyone to start on `catalog/ → engine/ → verify/`.
+
+### Decisions already made (so a new session doesn't relitigate them)
+- Event schema extended to **v1.1**: added `scenario_id`, `verdict`, `attrs`; all nullable.
+- `scenario_id` is required only on scenario-scoped events, not every `swarm.*` (run_start/
+  plan/run_end are not about one scenario).
+- Organic events' `evidence_ref` uses `organic` in place of `run_id`.
+These are reflected in `contracts/events.py`, overview §5.1, and dev-B §4a, and are marked
+"pending B + C sign-off" — confirm at the schema-freeze (M1) before relying on them hard.
+
+### Still open / needs the team
+- B must sign off dev-B §4a and ship `contracts/flags.yaml` + fixtures.
+- A fills the `scenario_ids` column of the flag registry as the catalog grows.
+- Product framing: README says "self-healing security / ATO response"; specs say
+  attack-simulation. Confirm which story the demo tells (affects which scenarios to prioritize
+  — ATO response leans on customer-a's rate-limit + password-reset flags).
