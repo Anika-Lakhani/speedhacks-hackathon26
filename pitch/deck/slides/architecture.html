@@ -4,20 +4,20 @@
 <p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;font-weight:700;letter-spacing:4px;color:#22D3EE">ARCHITECTURE</p>
 <h2 style="font-family:'Space Grotesk', Arial, sans-serif;font-size:72px;font-weight:700;line-height:1.1;color:#E8ECF2">One loop, four components.</h2>
 </div>
-<div style="position:absolute;left:128px;top:300px;width:480px;height:240px;background:linear-gradient(180deg, #172030 0%, #10151F 100%);border:2px dashed #3A4458;border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:8px">
+<div style="position:absolute;left:128px;top:300px;width:480px;height:240px;background:linear-gradient(180deg, #172030 0%, #10151F 100%);border:1px solid #232B3B;border-radius:20px;box-shadow:0px 24px 48px rgba(0,0,0,0.35);padding:24px;display:flex;flex-direction:column;gap:8px">
 <p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:32px;font-weight:700;line-height:1.2">Demo customer sites</p>
 <p style="font-size:24px;line-height:1.4;color:#8A94A6">3 apps, 9 toggleable weakness flags. Probes only ever get synthetic data.</p>
-<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">sites/ · <span style="color:#FACC15">building</span></p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">sites/ · <span style="color:#34D399">built</span></p>
 </div>
 <div style="position:absolute;left:720px;top:300px;width:480px;height:240px;background:linear-gradient(180deg, #172030 0%, #10151F 100%);border:1px solid #232B3B;border-radius:20px;box-shadow:0px 24px 48px rgba(0,0,0,0.35);padding:24px;display:flex;flex-direction:column;gap:8px">
 <p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:32px;font-weight:700;line-height:1.2">Keewano event store</p>
 <p style="font-size:24px;line-height:1.4;color:#8A94A6">Per-customer tables, schema-validated ingest, write-once evidence, sliced reads.</p>
 <p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">keewano/ · <span style="color:#34D399">built</span></p>
 </div>
-<div style="position:absolute;left:1312px;top:300px;width:480px;height:240px;background:linear-gradient(180deg, #172030 0%, #10151F 100%);border:2px dashed #3A4458;border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:8px">
+<div style="position:absolute;left:1312px;top:300px;width:480px;height:240px;background:linear-gradient(180deg, #172030 0%, #10151F 100%);border:1px solid #232B3B;border-radius:20px;box-shadow:0px 24px 48px rgba(0,0,0,0.35);padding:24px;display:flex;flex-direction:column;gap:8px">
 <p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:32px;font-weight:700;line-height:1.2">Security memory</p>
 <p style="font-size:24px;line-height:1.4;color:#8A94A6">customer-X.md per tenant, plus privacy-gated shared-intelligence.md.</p>
-<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">memory/ · <span style="color:#FACC15">building</span></p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">memory/ · <span style="color:#34D399">built</span></p>
 </div>
 <div style="position:absolute;left:128px;top:640px;width:1664px;height:252px;background:linear-gradient(135deg, #0F3440 0%, #0E1A24 100%);border:2px solid #22D3EE;border-radius:20px;box-shadow:0px 0px 56px rgba(34,211,238,0.25);padding:24px 32px;display:flex;flex-direction:column;gap:16px">
 <div style="display:flex;flex-direction:row;gap:16px;align-items:baseline">
@@ -49,6 +49,6 @@
 <p style="position:absolute;left:1036px;top:572px;width:260px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">verdicts</p>
 <x-connector x1="1552" y1="544" x2="1552" y2="636" head="end" style="color:#22D3EE;border-width:3px"></x-connector>
 <p style="position:absolute;left:1568px;top:572px;width:224px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#8A94A6">context</p>
-<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#8A94A6">Solid = built and tested on our repo today. Dashed = in progress.</p>
-<aside>Four components, one loop. The demo customer sites emit security events and answer our marked probes using toggleable weakness flags — never real data. Everything lands in Keewano, our per-customer event store: every event is validated against a frozen contract, evidence is write-once so findings stay reproducible, and reads are tenant-scoped slices, so no query can cross customers. Keewano feeds the security memory: a page per customer, plus a privacy-gated shared-intelligence page. The attack harness reads that memory and the event history, the LLM planner — Gemini — picks scenarios from a fixed catalog, the probe engine fires them, a deterministic verifier judges them, and confirmed findings wait at a human approval gate. Verdicts and evidence go straight back into Keewano, and the loop starts again. Status: the event store and attack harness are built and tested; the demo sites and memory layer are being finished now. [UPDATE STATUS BEFORE RECORDING]</aside>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#8A94A6">All four components are built and live in our repo today.</p>
+<aside>Four components, one loop. The demo customer sites emit security events and answer our marked probes using toggleable weakness flags — never real data. Everything lands in Keewano, our per-customer event store: every event is validated against a frozen contract, evidence is write-once so findings stay reproducible, and reads are tenant-scoped slices, so no query can cross customers. Keewano feeds the security memory: a page per customer, plus a privacy-gated shared-intelligence page. The attack harness reads that memory and the event history, the LLM planner — Gemini — picks scenarios from a fixed catalog, the probe engine fires them, a deterministic verifier judges them, and confirmed findings wait at a human approval gate. Verdicts and evidence go straight back into Keewano, and the loop starts again. All four components are built today.</aside>
 </section>
