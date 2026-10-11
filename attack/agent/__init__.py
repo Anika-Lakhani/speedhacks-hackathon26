@@ -1,4 +1,4 @@
-from attack.agent.client import ClaudePlanner
+from attack.agent.client import GeminiPlanner
 from attack.agent.models import (
     PlannedStep,
     PlanOutput,
@@ -11,7 +11,7 @@ from attack.agent.models import (
 from attack.agent.planner import DummyPlanner, Planner, sanitize_plan
 
 __all__ = [
-    "ClaudePlanner",
+    "GeminiPlanner",
     "DummyPlanner",
     "PlanOutput",
     "PlanRequest",

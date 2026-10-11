@@ -1,7 +1,7 @@
 import json
 from types import SimpleNamespace
 
-from attack.agent import ClaudePlanner, DummyPlanner, PlanRequest, ScenarioBrief, TestPlan
+from attack.agent import DummyPlanner, GeminiPlanner, PlanRequest, ScenarioBrief, TestPlan
 from attack.agent.models import PlannedStep
 from attack.agent.planner import sanitize_plan
 from attack.agent.prompts import build_user_message
@@ -72,20 +72,22 @@ def test_prompt_contains_catalog_ids_and_diff(catalog):
     assert "SCN-IDOR-001" in msg and "touched login handler" in msg
 
 
-class FakeAnthropic:
+class FakeGemini:
+    """Stands in for genai.Client: returns canned response texts, or raises."""
+
     def __init__(self, payloads):
         self.payloads = list(payloads)
         self.calls = []
-        self.messages = self
+        self.models = self
 
-    def create(self, **kw):
+    def generate_content(self, **kw):
         self.calls.append(kw)
         p = self.payloads.pop(0)
         if isinstance(p, Exception):
             raise p
-        block = SimpleNamespace(type="tool_use", name="submit_plan", input=p)
+        usage = SimpleNamespace(prompt_token_count=1000, candidates_token_count=200)
         return SimpleNamespace(
-            content=[block], usage=SimpleNamespace(input_tokens=1000, output_tokens=200)
+            text=p if isinstance(p, str) else json.dumps(p), usage_metadata=usage
         )
 
 
@@ -107,39 +109,50 @@ GOOD = {
 }
 
 
-def test_claude_planner_uses_env_model_and_forces_tool(catalog, monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_MODEL", "claude-test-model")
-    client = FakeAnthropic([GOOD])
-    plan = ClaudePlanner(client=client).plan(request(catalog))
+def test_gemini_planner_uses_env_model_and_json_schema(catalog, monkeypatch):
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-test-model")
+    client = FakeGemini([GOOD])
+    plan = GeminiPlanner(client=client).plan(request(catalog))
     call = client.calls[0]
-    assert call["model"] == "claude-test-model"
-    assert call["tool_choice"] == {"type": "tool", "name": "submit_plan"}
+    assert call["model"] == "gemini-test-model"
+    assert call["config"]["response_mime_type"] == "application/json"
+    assert "SCN-RATE-001" in call["contents"]
     assert [s.scenario_id for s in plan.steps] == ["SCN-RATE-001"]
     assert plan.dropped_ids == ["SCN-HALLUCINATED-001"]
-    assert plan.planner == "claude" and plan.cost_usd > 0 and not plan.degraded
+    assert plan.planner == "gemini" and plan.cost_usd > 0 and not plan.degraded
 
 
-def test_claude_planner_retries_once_then_succeeds(catalog):
-    client = FakeAnthropic([{"steps": "not-a-list"}, GOOD])
-    plan = ClaudePlanner(client=client).plan(request(catalog))
-    assert len(client.calls) == 2 and plan.planner == "claude"
+def test_gemini_planner_retries_once_then_succeeds(catalog):
+    client = FakeGemini(["not json at all", GOOD])
+    plan = GeminiPlanner(client=client).plan(request(catalog))
+    assert len(client.calls) == 2 and plan.planner == "gemini"
 
 
-def test_claude_planner_falls_back_degraded(catalog):
-    client = FakeAnthropic([{"bad": 1}, ConnectionError("no network")])
-    plan = ClaudePlanner(client=client).plan(request(catalog))
+def test_gemini_planner_falls_back_degraded(catalog):
+    client = FakeGemini([{"bad": 1}, ConnectionError("no network")])
+    plan = GeminiPlanner(client=client).plan(request(catalog))
     assert plan.degraded and plan.planner == "dummy-fallback" and plan.steps
+
+
+def test_safety_filtered_reply_falls_back(catalog):
+    class Blocked(FakeGemini):
+        def generate_content(self, **kw):
+            self.calls.append(kw)
+            return SimpleNamespace(text=None, usage_metadata=None)
+
+    plan = GeminiPlanner(client=Blocked([])).plan(request(catalog))
+    assert plan.degraded and plan.steps
 
 
 def test_extra_fields_in_model_output_rejected(catalog):
     bad = {"steps": [{**GOOD["steps"][0], "run_command": "rm -rf /"}]}
-    plan = ClaudePlanner(client=FakeAnthropic([bad, bad])).plan(request(catalog))
+    plan = GeminiPlanner(client=FakeGemini([bad, bad])).plan(request(catalog))
     assert plan.degraded  # off-schema output is rejected, never executed
 
 
-def test_schema_sent_to_model_is_plan_output_only(catalog):
-    client = FakeAnthropic([GOOD])
-    ClaudePlanner(client=client).plan(request(catalog))
-    schema = client.calls[0]["tools"][0]["input_schema"]
+def test_schema_sent_to_model_is_plan_output_only_and_gemini_safe(catalog):
+    client = FakeGemini([GOOD])
+    GeminiPlanner(client=client).plan(request(catalog))
+    schema = client.calls[0]["config"]["response_json_schema"]
     assert set(schema["properties"]) == {"steps", "skipped"}
-    json.dumps(schema)
+    assert "additionalProperties" not in json.dumps(schema)

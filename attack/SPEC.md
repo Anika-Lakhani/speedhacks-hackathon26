@@ -3,7 +3,7 @@
 **Scope:** the offense side of the loop. **Safety model:** simulation only. No real
 exploitation ever (overview §5.6): scenarios are *data* describing benign, header-tagged
 probes; the demo site returns a *simulated* outcome derived from its vulnerability flags;
-Claude only plans, prioritizes and interprets. Nothing here sends an exploit.
+The LLM planner (Gemini) only plans, prioritizes and interprets. Nothing here sends an exploit.
 
 **Reads:** `customer-X.md` and `shared-intelligence.md` (Dev C), Keewano event slices and
 `contracts/flags.yaml` (Dev B). **Writes:** `swarm.*` events to Keewano. **Imports:**
@@ -12,7 +12,7 @@ Claude only plans, prioritizes and interprets. Nothing here sends an exploit.
 ```
 attack/
   catalog/     scenario catalog (YAML) + loader + models
-  agent/       the planner (Claude): picks scenarios, interprets results
+  agent/       the planner (Gemini): picks scenarios, interprets results
   engine/      fires marked probes at the demo site, returns raw ProbeResult
   verify/      ProbeResult + invariant + flag ground truth -> Verdict
   harness/     orchestrates a run; enforces budgets/allowlists; logs to Keewano
@@ -69,7 +69,8 @@ flags. Keep them synthetic; coordinate the flag names with B.
 
 ## 2. Planner agent (`attack/agent/`)
 
-**The planner is Claude — this is the product's point, not a swappable detail.** It does
+**The planner is an LLM (Gemini) — real reasoning is the product's point; the `Planner`
+protocol keeps the provider swappable.** It does
 ordinary security *analysis*: given the customer's memory, the code diff and the shared
 lessons, it chooses and orders which scenarios are worth running this cycle. The reasoning
 is non-deterministic by design — a different diff or memory state yields a different plan,
@@ -106,16 +107,17 @@ change-recency (scenarios touching changed surfaces first) · novelty · known h
 
 **Implementation.** `agent/planner.py` defines a `Planner` protocol with one method
 `plan(request: PlanRequest) -> TestPlan`. Two implementations:
-- `ClaudePlanner` (`agent/client.py`) — the real one, used in the demo. Wraps the Anthropic
-  SDK. The model id is **config-driven**, read from `ANTHROPIC_MODEL` (default: the latest
-  Opus, e.g. `claude-opus-5-5`); never hardcode it in call sites, so a model change is a
-  one-line env edit. The API key is read from `ANTHROPIC_KEY` (`.env`, gitignored). Use the
-  SDK's structured-output / tool-use so the response decodes straight into `TestPlan`; on a
-  decode failure, retry once, then fall back to `DummyPlanner` and mark the plan
-  `degraded=True` in `attrs` rather than crashing the demo.
+- `GeminiPlanner` (`agent/client.py`) — the real one, used in the demo. Wraps the
+  `google-genai` SDK. The model id is **config-driven**, read from `GEMINI_MODEL` (default
+  `gemini-2.5-pro`); never hardcode it in call sites, so a model change is a one-line env
+  edit. The API key is read from `GEMINI_API_KEY` (`.env`, gitignored). It requests JSON
+  output against the `PlanOutput` schema and validates the reply strictly (unknown fields
+  rejected); on a decode failure, a safety-filtered reply, or a network/auth error, retry
+  once, then fall back to `DummyPlanner` and mark the plan `degraded=True` rather than
+  crashing the demo.
 - `DummyPlanner` — a deterministic hard-coded plan. **Test and fallback only**, not the demo
   path. Because the whole pipeline after the plan is deterministic (§3–§4), its downstream
-  output is identical to Claude's; only the *choice* of scenarios loses its intelligence.
+  output is identical to Gemini's; only the *choice* of scenarios loses its intelligence.
   Keep it behind a `--dummy-planner` flag so you can flip to it instantly if the network or
   key fails on stage.
 
@@ -287,7 +289,7 @@ in memory and serves slices.
 2. `engine/` against `FakeSite`; `ProbeResult` captured end to end.
 3. `verify/` with the §4 table; unit tests for each cell.
 4. `harness/` wiring + `DummyPlanner`; budgets + `swarm.*` events into `FakeKeewano`.
-5. `agent/` real `ClaudePlanner` with structured output; keep `DummyPlanner` as fallback.
+5. `agent/` real `GeminiPlanner` with structured output; keep `DummyPlanner` as fallback.
 6. Swap fakes for real `SiteClient`/`KeewanoClient` at integration.
 
 ## 9. Acceptance criteria (from `docs/dev-A-...md` §5)
@@ -336,7 +338,7 @@ tests/       Pytest. Put A's tests under tests/attack/.
 ### Tooling
 - Python **3.12+**, managed with **uv**. `uv sync` installs; `uv run pytest -q` tests;
   `uv run ruff check .` and `uv run ruff format .` lint/format. Add deps with `uv add <pkg>`.
-- Installed already: `anthropic`, `fastapi`, `uvicorn`, `httpx`, `pydantic` (v2), `pyyaml`.
+- Installed already: `google-genai`, `fastapi`, `uvicorn`, `httpx`, `pydantic` (v2), `pyyaml`.
 - Ruff config: line length 100, rules E/F/I/B/UP. Keep the tree green before committing.
 
 ### The `contracts` API (already built — use it, don't redefine events)

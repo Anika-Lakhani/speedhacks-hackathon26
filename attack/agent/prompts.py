@@ -4,7 +4,7 @@ import json
 
 from attack.agent.models import PlanRequest
 
-PROMPT_VERSION = "planner-v1"
+PROMPT_VERSION = "planner-v2"
 
 SYSTEM_PROMPT = """\
 You are the planning stage of a defensive security-testing loop that runs entirely against \
@@ -28,7 +28,7 @@ How to prioritise (highest weight first):
 6. Expected value overall.
 Use applicable shared lessons as hints about what tends to matter, never as proof it applies.
 
-Respond by calling the submit_plan tool exactly once. Give each step a one-sentence \
+Respond with a single JSON object matching the provided schema. Give each step a one-sentence \
 rationale, priority (1 = highest, unique), and expected_value in 0..1. List scenarios you \
 deliberately skip in `skipped` with a reason. Return at most max_scenarios steps."""
 

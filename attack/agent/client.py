@@ -1,4 +1,4 @@
-"""ClaudePlanner: the real planner. Model id and key come from the environment."""
+"""GeminiPlanner: the real planner. Model id and key come from the environment."""
 
 import os
 from pathlib import Path
@@ -8,11 +8,10 @@ from attack.agent.models import PlanOutput, PlanRequest, TestPlan
 from attack.agent.planner import DummyPlanner, sanitize_plan
 from attack.agent.prompts import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
 
-DEFAULT_MODEL = "claude-opus-5-5"
-TOOL_NAME = "submit_plan"
+DEFAULT_MODEL = "gemini-2.5-pro"
 # Rough $/Mtok used only for the budget tracker's spend estimate; override via env.
-DEFAULT_PRICE_IN = 15.0
-DEFAULT_PRICE_OUT = 75.0
+DEFAULT_PRICE_IN = 1.25
+DEFAULT_PRICE_OUT = 10.0
 
 
 def load_dotenv(path: Path = Path(".env")) -> None:
@@ -26,54 +25,65 @@ def load_dotenv(path: Path = Path(".env")) -> None:
             os.environ.setdefault(key.strip(), value.strip().strip("'\""))
 
 
-class ClaudePlanner:
-    def __init__(self, client: Any = None, model: str | None = None, max_tokens: int = 2000):
-        load_dotenv()
-        self.model = model or os.environ.get("ANTHROPIC_MODEL", DEFAULT_MODEL)
-        self.max_tokens = max_tokens
-        if client is None:
-            import anthropic
+def _strip_additional_properties(node: Any) -> Any:
+    """Gemini's structured output rejects `additionalProperties`; strictness is enforced
+    on our side by PlanOutput (extra='forbid') when the response is validated."""
+    if isinstance(node, dict):
+        return {
+            k: _strip_additional_properties(v)
+            for k, v in node.items()
+            if k != "additionalProperties"
+        }
+    if isinstance(node, list):
+        return [_strip_additional_properties(v) for v in node]
+    return node
 
-            key = os.environ.get("ANTHROPIC_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-            client = anthropic.Anthropic(api_key=key)
+
+RESPONSE_SCHEMA = _strip_additional_properties(PlanOutput.model_json_schema())
+
+
+class GeminiPlanner:
+    def __init__(self, client: Any = None, model: str | None = None):
+        load_dotenv()
+        self.model = model or os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
+        if client is None:
+            from google import genai
+
+            client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
         self.client = client
 
     def _cost(self, usage: Any) -> float:
-        price_in = float(os.environ.get("ANTHROPIC_PRICE_IN", DEFAULT_PRICE_IN))
-        price_out = float(os.environ.get("ANTHROPIC_PRICE_OUT", DEFAULT_PRICE_OUT))
-        tokens_in = getattr(usage, "input_tokens", 0) or 0
-        tokens_out = getattr(usage, "output_tokens", 0) or 0
+        price_in = float(os.environ.get("GEMINI_PRICE_IN", DEFAULT_PRICE_IN))
+        price_out = float(os.environ.get("GEMINI_PRICE_OUT", DEFAULT_PRICE_OUT))
+        tokens_in = getattr(usage, "prompt_token_count", 0) or 0
+        tokens_out = getattr(usage, "candidates_token_count", 0) or 0
         return (tokens_in * price_in + tokens_out * price_out) / 1_000_000
 
     def _call(self, request: PlanRequest) -> tuple[PlanOutput, float]:
-        resp = self.client.messages.create(
+        resp = self.client.models.generate_content(
             model=self.model,
-            max_tokens=self.max_tokens,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": build_user_message(request)}],
-            tools=[
-                {
-                    "name": TOOL_NAME,
-                    "description": "Submit the ordered test plan.",
-                    "input_schema": PlanOutput.model_json_schema(),
-                }
-            ],
-            tool_choice={"type": "tool", "name": TOOL_NAME},
+            contents=build_user_message(request),
+            config={
+                "system_instruction": SYSTEM_PROMPT,
+                "response_mime_type": "application/json",
+                "response_json_schema": RESPONSE_SCHEMA,
+            },
         )
-        block = next(b for b in resp.content if b.type == "tool_use" and b.name == TOOL_NAME)
-        return PlanOutput.model_validate(block.input), self._cost(resp.usage)
+        # resp.text is None when a safety filter blocks the reply; that fails validation.
+        output = PlanOutput.model_validate_json(resp.text)
+        return output, self._cost(getattr(resp, "usage_metadata", None))
 
     def plan(self, request: PlanRequest) -> TestPlan:
         cost = 0.0
         for _ in range(2):  # one retry on a decode failure
             try:
                 output, spent = self._call(request)
-            except Exception:  # decode, network or auth failure: retry once, then degrade
+            except Exception:  # decode, filter, network or auth failure: retry once, then degrade
                 continue
             cost += spent
             plan = TestPlan(
                 **output.model_dump(),
-                planner="claude",
+                planner="gemini",
                 model=self.model,
                 prompt_version=PROMPT_VERSION,
                 cost_usd=cost,

@@ -7,7 +7,7 @@
 import argparse
 import sys
 
-from attack.agent import ClaudePlanner, DummyPlanner
+from attack.agent import DummyPlanner, GeminiPlanner
 from attack.catalog import load_catalog, load_flags
 from attack.clients import FakeKeewano, FakeSite, KeewanoClient, SiteClient
 from attack.harness.approval import DEFAULT_QUEUE_PATH, ApprovalQueue
@@ -50,7 +50,7 @@ def cmd_run(args) -> int:
         diff_summary=args.diff,
         changed_surfaces=args.changed,
     )
-    planner = DummyPlanner() if args.dummy_planner else ClaudePlanner()
+    planner = DummyPlanner() if args.dummy_planner else GeminiPlanner()
     report = run(config, planner, site, keewano, catalog, ApprovalQueue(DEFAULT_QUEUE_PATH))
     print(report.model_dump_json(indent=2))
     return 0
