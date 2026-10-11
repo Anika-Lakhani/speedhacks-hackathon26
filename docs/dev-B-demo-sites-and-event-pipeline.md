@@ -93,7 +93,7 @@ Initial flag names (from the §2 table): `customer-a`: `idor_orders`, `login_rat
 ### 4a.4 Event schema additions (§5.1 v1.1, all optional / nullable)
 | Field | Type | Notes |
 |-------|------|-------|
-| `scenario_id` | string | Set on `probe.result` and all `swarm.*` events |
+| `scenario_id` | string | Required on `probe.result`, `swarm.probe`, `swarm.verdict` |
 | `verdict` | enum | `confirmed` \| `not_reproduced` \| `inconclusive` \| `blocked` (§5.3); only on `swarm.verdict` |
 | `attrs` | JSON object | Free-form extras (confidence, severity, invariant); never required for parsing |
 
@@ -103,7 +103,7 @@ Initial flag names (from the §2 table): `customer-a`: `idor_orders`, `login_rat
 - All probe and swarm events have `simulated: true` and share the run's `run_id`.
 
 ### 4a.5 Evidence
-- `evidence_ref` format: `ev://<customer_id>/<run_id>/<event_id>`.
+- `evidence_ref` format: `ev://<customer_id>/<run_id>/<event_id>`; organic events use `organic` in place of `run_id`.
 - `GET /evidence/{evidence_ref}` (on the Keewano API) returns `{"request": {...}, "response": {...}, "flags_snapshot": {...}, "code_revision": "..."}`. This is what makes a finding replayable from stored evidence alone.
 
 ### 4a.6 Keewano API surface (base `http://localhost:4000`)

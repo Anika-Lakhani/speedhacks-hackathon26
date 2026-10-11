@@ -100,12 +100,12 @@ Every event — real or simulated — is one row:
 | `code_revision` | string | Version of the site under test |
 | `knowledge_version` | string | Version of `shared-intelligence.md` in play |
 | `simulated` | bool | **`true` for anything the attack engine produces** |
-| `evidence_ref` | string | Pointer to stored request/response/log artifact; format `ev://<customer_id>/<run_id>/<event_id>` |
-| `scenario_id` | string, nullable | *(v1.1)* Scenario catalog ID; set on `probe.result` and `swarm.*` events |
+| `evidence_ref` | string | Pointer to stored request/response/log artifact; format `ev://<customer_id>/<run_id>/<event_id>` (`organic` in place of `run_id` for organic events) |
+| `scenario_id` | string, nullable | *(v1.1)* Scenario catalog ID; required on `probe.result`, `swarm.probe`, `swarm.verdict` |
 | `verdict` | enum, nullable | *(v1.1)* `confirmed` \| `not_reproduced` \| `inconclusive` \| `blocked` (§5.3); only on `swarm.verdict` |
 | `attrs` | JSON object, nullable | *(v1.1)* Free-form extras (confidence, severity, invariant); never required for parsing |
 
-`event_type` ownership (v1.1): sites emit organic types and `probe.result` (`actor: system`); Dev A's harness emits `swarm.run_start`, `swarm.plan`, `swarm.probe`, `swarm.verdict`, `swarm.run_end` (`actor: swarm_agent`). Full integration details: `dev-B` §4a.
+`event_type` ownership (v1.1): sites emit organic types and `probe.result` (`actor: system`); Dev A's harness emits `swarm.run_start`, `swarm.plan`, `swarm.probe`, `swarm.verdict`, `swarm.run_end` (`actor: swarm_agent`). Full integration details: `dev-B` §4a. Code: `contracts/events.py` (pydantic) and `contracts/event.schema.json`.
 
 ### 5.2 Evidence labels (used in both memory files)
 Every conclusion is one of: `observed` · `hypothesized` · `reproduced` · `verified`. Missing evidence is never a pass.

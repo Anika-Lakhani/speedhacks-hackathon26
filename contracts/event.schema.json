@@ -1,0 +1,204 @@
+{
+  "$defs": {
+    "Actor": {
+      "enum": [
+        "user",
+        "system",
+        "swarm_agent"
+      ],
+      "title": "Actor",
+      "type": "string"
+    },
+    "PolicyOutcome": {
+      "enum": [
+        "allow",
+        "deny",
+        "flag"
+      ],
+      "title": "PolicyOutcome",
+      "type": "string"
+    },
+    "Verdict": {
+      "description": "Outcome of one scenario test, checked against the scenario's invariant.",
+      "enum": [
+        "confirmed",
+        "not_reproduced",
+        "inconclusive",
+        "blocked"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "description": "Primary key (uuid)",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "customer_id": {
+      "description": "Tenant scope",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "title": "Customer Id",
+      "type": "string"
+    },
+    "ts": {
+      "description": "Event time, timezone-aware ISO-8601",
+      "format": "date-time",
+      "title": "Ts",
+      "type": "string"
+    },
+    "run_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Groups events from one run; null for organic events",
+      "title": "Run Id"
+    },
+    "actor": {
+      "$ref": "#/$defs/Actor"
+    },
+    "tool": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Tool/agent identity, if any",
+      "title": "Tool"
+    },
+    "event_type": {
+      "description": "e.g. auth.login, probe.result",
+      "minLength": 1,
+      "title": "Event Type",
+      "type": "string"
+    },
+    "target": {
+      "description": "Endpoint/resource",
+      "title": "Target",
+      "type": "string"
+    },
+    "action": {
+      "description": "What was attempted",
+      "title": "Action",
+      "type": "string"
+    },
+    "policy_outcome": {
+      "$ref": "#/$defs/PolicyOutcome"
+    },
+    "state_transition": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Before->after, if relevant",
+      "title": "State Transition"
+    },
+    "code_revision": {
+      "description": "Version of the site under test",
+      "minLength": 1,
+      "title": "Code Revision",
+      "type": "string"
+    },
+    "knowledge_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Version of shared-intelligence.md in play",
+      "title": "Knowledge Version"
+    },
+    "simulated": {
+      "description": "True for anything the attack engine produces",
+      "title": "Simulated",
+      "type": "boolean"
+    },
+    "evidence_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "ev://<customer_id>/<run_id|organic>/<event_id>",
+      "title": "Evidence Ref"
+    },
+    "scenario_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Scenario catalog ID",
+      "title": "Scenario Id"
+    },
+    "verdict": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Verdict"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Only on swarm.verdict"
+    },
+    "attrs": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Free-form extras; never required for parsing",
+      "title": "Attrs"
+    }
+  },
+  "required": [
+    "customer_id",
+    "ts",
+    "actor",
+    "event_type",
+    "target",
+    "action",
+    "policy_outcome",
+    "code_revision",
+    "simulated"
+  ],
+  "title": "Event",
+  "type": "object",
+  "$id": "swarmshield/event/v1.1"
+}
