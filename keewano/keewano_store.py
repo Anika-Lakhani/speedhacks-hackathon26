@@ -9,7 +9,7 @@ Every method raises StoreNotConfigured, so selecting this store fails loudly at 
 from datetime import datetime
 
 from contracts import Event
-from keewano.storage import Artifact, EventStore, StoreNotConfigured
+from keewano.storage import Artifact, EventStore, Position, StoreNotConfigured
 
 NOT_CONFIGURED = (
     "Keewano store is not configured: the ingestion method (SDK or REST) and credentials "
@@ -44,6 +44,23 @@ class KeewanoStore(EventStore):
         run_id: str | None = None,
         limit: int = 500,
     ) -> list[Event]:
+        self._fail()
+
+    def query_page(
+        self,
+        customer_id: str,
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        event_type: str | None = None,
+        run_id: str | None = None,
+        after: Position | None = None,
+        start: Position | None = None,
+        limit: int = 500,
+    ) -> list[tuple[Position, Event]]:
+        self._fail()
+
+    def first_seen(self, customer_id: str, code_revision: str) -> Position | None:
         self._fail()
 
     def put_artifact(self, evidence_ref: str, artifact: Artifact) -> None:
