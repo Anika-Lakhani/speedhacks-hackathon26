@@ -80,30 +80,32 @@ Milestones: **M1 (end W1)** contracts frozen · **M2 (end W2)** a site's events 
 
 The only hard interfaces between workstreams. Ownership of each canonical contract: **B owns the event schema, C owns the two Markdown page schemas, A owns the fake-hacking + verdict model.** Changes after M1 require all three to sign off.
 
-### 5.1 Keewano event schema (v1.1, pending B + C sign-off) — owned by B
+### 5.1 Keewano event schema (v1.1, frozen by B at M1; Dev C sign-off pending) — owned by B
 
-Every event — real or simulated — is one row:
+Every event — real or simulated — is one row. Unknown fields are rejected (extras go in `attrs`). Field-by-field reference with examples: `docs/event-schema.md`.
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `event_id` | string (uuid) | Primary key |
-| `customer_id` | string | Tenant scope; never crosses tenants |
-| `ts` | ISO-8601 | Event time |
-| `run_id` | string | Groups events from one agent/test run; null for organic site events |
-| `actor` | enum | `user` \| `system` \| `swarm_agent` |
-| `tool` | string | Tool/agent identity, if any |
-| `event_type` | string | e.g. `auth.login`, `order.access`, `probe.result` |
-| `target` | string | Endpoint/resource |
-| `action` | string | What was attempted |
-| `policy_outcome` | enum | `allow` \| `deny` \| `flag` |
-| `state_transition` | string | Before→after, if relevant |
-| `code_revision` | string | Version of the site under test |
-| `knowledge_version` | string | Version of `shared-intelligence.md` in play |
-| `simulated` | bool | **`true` for anything the attack engine produces** |
-| `evidence_ref` | string | Pointer to stored request/response/log artifact; format `ev://<customer_id>/<run_id>/<event_id>` (`organic` in place of `run_id` for organic events) |
-| `scenario_id` | string, nullable | *(v1.1)* Scenario catalog ID; required on `probe.result`, `swarm.probe`, `swarm.verdict` |
-| `verdict` | enum, nullable | *(v1.1)* `confirmed` \| `not_reproduced` \| `inconclusive` \| `blocked` (§5.3); only on `swarm.verdict` |
-| `attrs` | JSON object, nullable | *(v1.1)* Free-form extras (confidence, severity, invariant); never required for parsing |
+| Field | Type | Required? | Notes |
+|-------|------|-----------|-------|
+| `event_id` | string | no (defaults to a uuid4) | Primary key; non-empty, no `/` |
+| `customer_id` | string | **yes** | Tenant scope; never crosses tenants. Lowercase letters, digits, hyphens (`customer-a`) |
+| `ts` | RFC 3339 string | **yes** | Event time; timezone required |
+| `run_id` | string, nullable | on `probe.result` and `swarm.*` | Groups events from one agent/test run; null for organic site events. No `/`; `organic` is reserved |
+| `actor` | enum | **yes** | `user` \| `system` \| `swarm_agent` |
+| `tool` | string, nullable | no | Tool/agent identity, if any |
+| `event_type` | string | **yes** | e.g. `auth.login`, `order.access`, `probe.result` |
+| `target` | string | **yes** | Endpoint/resource |
+| `action` | string | **yes** | What was attempted |
+| `policy_outcome` | enum | **yes** | `allow` \| `deny` \| `flag` (meaning on `probe.result`: see below) |
+| `state_transition` | string, nullable | no | Before→after, if relevant |
+| `code_revision` | string | **yes** | Version of the site under test |
+| `knowledge_version` | string, nullable | no | Version of `shared-intelligence.md` in play |
+| `simulated` | bool (strict) | **yes** | **`true` for anything the attack engine produces**; must be a JSON boolean |
+| `evidence_ref` | string, nullable | on `probe.result` and `swarm.*` | Pointer to stored request/response/log artifact; format `ev://<customer_id>/<run_id>/<event_id>` (`organic` in place of `run_id` for organic events) |
+| `scenario_id` | string, nullable | on `probe.result`, `swarm.probe`, `swarm.verdict` | *(v1.1)* Scenario catalog ID |
+| `verdict` | enum, nullable | on `swarm.verdict` (forbidden elsewhere) | *(v1.1)* `confirmed` \| `not_reproduced` \| `inconclusive` \| `blocked` (§5.3) |
+| `attrs` | JSON object, nullable | no | *(v1.1)* Free-form extras (confidence, severity, invariant); never required for parsing |
+
+`policy_outcome` on `probe.result` records what the site did with the marked request: `allow` = flag on, the synthetic vulnerable response was returned; `deny` = flag off, the secure response was returned; `flag` = the site detected and flagged the probe.
 
 `event_type` ownership (v1.1): sites emit organic types and `probe.result` (`actor: system`); Dev A's harness emits `swarm.run_start`, `swarm.plan`, `swarm.probe`, `swarm.verdict`, `swarm.run_end` (`actor: swarm_agent`). Full integration details: `dev-B` §4a. Code: `contracts/events.py` (pydantic) and `contracts/event.schema.json`.
 
