@@ -83,7 +83,10 @@ def run(
     generator=None,
     generated_store: GeneratedStore | None = None,
     flags: list[FlagDef] | None = None,
+    run_id: str | None = None,
 ) -> RunReport:
+    """Run one cycle. Pass `run_id` to know it before the run ends (e.g. to return it from an
+    API call and poll events by it); otherwise one is generated."""
     catalog = catalog if catalog is not None else load_catalog()
     cat_version = catalog_version()
     scenarios = {s.id: s for s in catalog.values() if s.customer_id == config.customer_id}
@@ -94,7 +97,9 @@ def run(
         config.budget, config.allowed_tools, **({"clock": clock} if clock else {})
     )
     guarded = GuardedSite(site, tracker)
-    run_id = f"run-{uuid.uuid4().hex[:8]}"
+    run_id = run_id or f"run-{uuid.uuid4().hex[:8]}"
+    if "/" in run_id or run_id == "organic":  # Keewano contract: no '/', 'organic' is reserved
+        raise ValueError(f"invalid run_id {run_id!r}")
     warnings: list[str] = []
 
     try:

@@ -224,3 +224,26 @@ def test_event_contract_rejects_bad_swarm_event():
             code_revision="r",
             simulated=True,
         )
+
+
+def test_caller_supplied_run_id_is_used_everywhere(catalog, keewano, site_factory):
+    site = site_factory("customer-a", idor_orders=True)
+    report = run(make_config(site), DummyPlanner(), site, keewano, catalog, run_id="run-ui-0001")
+    assert report.run_id == "run-ui-0001"
+    assert {e.run_id for e in keewano.events} == {"run-ui-0001"}
+    assert all(parse_evidence_ref(e.evidence_ref)[1] == "run-ui-0001" for e in keewano.events)
+
+
+@pytest.mark.parametrize("bad", ["a/b", "organic", "../x"])
+def test_invalid_run_id_rejected_before_anything_runs(catalog, keewano, site_factory, bad):
+    site = site_factory("customer-a")
+    with pytest.raises(ValueError, match="invalid run_id"):
+        run(make_config(site), DummyPlanner(), site, keewano, catalog, run_id=bad)
+    assert keewano.events == [] and site.calls == []
+
+
+def test_run_id_is_generated_when_not_given(catalog, keewano, site_factory):
+    site = site_factory("customer-a")
+    a = run(make_config(site), DummyPlanner(), site, keewano, catalog)
+    b = run(make_config(site), DummyPlanner(), site, keewano, catalog)
+    assert a.run_id.startswith("run-") and a.run_id != b.run_id
