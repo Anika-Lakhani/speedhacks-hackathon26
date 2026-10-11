@@ -20,7 +20,7 @@ and `fixtures/events/` (nothing yet for M2–M8).
     schema staleness test; all existing tests still pass.
   - **Depends on:** nothing. Dev C sign-off still pending (see Open decisions).
 
-- [ ] **M2: Store and ingestion**
+- [x] **M2: Store and ingestion** *(done 2026-10-11; API doc: `docs/ingestion-api.md`)*
   - **Build:** a storage adapter interface in `keewano/` with (1) a local SQLite implementation,
     one table per `customer_id`, used for dev and tests, and (2) a Keewano implementation stubbed
     behind the same interface. The implementation is chosen by config (env var), not code
@@ -31,7 +31,9 @@ and `fixtures/events/` (nothing yet for M2–M8).
   - **Verify:** adapter contract tests run against both implementations (the stub raises a clear
     "not configured" error); malformed and wrong-tenant events rejected with reasons; config switch
     test; fixtures validate.
-  - **Depends on:** M1. `keewano/` is currently an empty package; build on it.
+  - **Depends on:** M1. `keewano/` was an empty package; built inside it.
+  - **Added beyond §4a:** `POST /evidence` (artifact upload, write-once) and an operator-only
+    rejects log (`.data/rejects.jsonl`, not exposed over HTTP). Needs Dev A's acknowledgement.
 
 - [ ] **M3: Read API**
   - **Build:** `GET /events` (required `customer_id`; `since`/`until`/`event_type`/`run_id`;

@@ -27,15 +27,23 @@ Python 3.12 and [uv](https://docs.astral.sh/uv/). Run everything from the repo r
 uv sync                          # create .venv, install deps (incl. dev group)
 uv run pytest                    # all tests
 uv run pytest tests/test_events.py tests/test_validate.py   # contract tests only
+uv run pytest tests/test_store.py tests/test_ingest.py      # store and ingestion tests
 uv run ruff check                # lint
 uv run python -m contracts       # regenerate contracts/event.schema.json after editing events.py
 ```
 
-Services (ports fixed by dev-B §4a.1/§4a.6). These modules don't exist yet; they arrive in
-M2–M6 and these are the intended entry points:
+Event store (M2; config via env, see `.env.example` and `docs/ingestion-api.md`):
 
 ```sh
-uv run uvicorn keewano.api:app --port 4000               # event store + read API
+uv run python -m keewano.setup                                # create per-tenant tables (idempotent)
+uv run uvicorn keewano.api:create_app --factory --port 4000   # event store API
+uv run python -m keewano.rejects                              # inspect rejected events
+uv run python -m keewano.fixtures                             # regenerate fixtures/events/*.jsonl
+```
+
+Sites (ports fixed by dev-B §4a.1). These modules arrive in M4–M6; intended entry points:
+
+```sh
 uv run uvicorn sites.customer_a.app:app --port 3001      # customer-a (e-commerce)
 uv run uvicorn sites.customer_b.app:app --port 3002      # customer-b (SaaS dashboard)
 uv run uvicorn sites.customer_c.app:app --port 3003      # customer-c (CMS)
