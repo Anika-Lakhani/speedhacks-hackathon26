@@ -38,6 +38,7 @@ from attack.harness.config import RunBudget, RunConfig
 from attack.harness.run import RunReport, run
 from attack.remediate import DummyFlagFixer, Fixer, FixRequest, GeminiFlagFixer
 from dashboard.data import MEMORY_DIR, DashboardData
+from distill.loop import after_run
 
 # Weakness flags seeded ON at startup, standing in for a "bad deploy" (dashboard spec beat 2).
 SEED_VULNERABLE: dict[str, dict[str, bool]] = {"customer-a": {"idor_orders": True}}
@@ -79,6 +80,7 @@ class RunJob:
         self.report: RunReport | None = None
         self.error: str | None = None
         self.started = datetime.now(UTC).isoformat()
+        self.distill: dict[str, Any] | None = None  # Dev C: page updates + sharing summary
 
 
 def _maybe(factory):
@@ -107,6 +109,7 @@ class DemoWorld:
         catalog_dir: Path = DEFAULT_CATALOG_DIR,
     ):
         self._catalog_dir = catalog_dir
+        self._memory_dir = memory_dir
         self.catalog: Catalog = load_catalog(catalog_dir)
         self.flags: list[FlagDef] = load_flags()
         self.keewano = FakeKeewano()
@@ -201,6 +204,7 @@ class DemoWorld:
         if job.status in ("done", "error"):
             out["error"] = job.error
             out["report"] = job.report.model_dump(mode="json") if job.report else None
+            out["distill"] = job.distill
         return out
 
     # -- fix -----------------------------------------------------------------------------
@@ -275,7 +279,9 @@ class DemoWorld:
         return {"approvals": pending}
 
     def approve(self, run_id: str, scenario_id: str) -> dict[str, Any]:
-        return self.queue.approve(run_id, scenario_id).model_dump()
+        item = self.queue.approve(run_id, scenario_id)
+        self._distill(item.customer_id, [])  # promote the finding to verified on the page
+        return item.model_dump()
 
     # -- internals -----------------------------------------------------------------------
 
@@ -313,7 +319,10 @@ class DemoWorld:
                 generator=generator,
                 generated_store=self.generated,
                 run_id=job.run_id,
+                memory_dir=self._memory_dir,
             )
+            events = self.keewano.get_slice(job.customer_id, run_id=job.run_id, limit=100_000)
+            job.distill = self._distill(job.customer_id, events)
             job.status = "done"
         except Exception as e:  # keep a runaway/unexpected failure out of the HTTP thread
             job.error = f"{type(e).__name__}: {e}"[:300]
@@ -322,6 +331,15 @@ class DemoWorld:
             with self._registry_lock:
                 if self._active.get(job.customer_id) == job.run_id:
                     self._active[job.customer_id] = None
+
+    def _distill(self, customer_id: str, events: list[dict[str, Any]]) -> dict[str, Any]:
+        """Dev C closes the loop: update customer-X.md, then share per SWARMSHIELD_SHARE_MODE
+        (review = wait for a human approve; auto = promote now). Never fails the run."""
+        approved = {(a.run_id, a.scenario_id) for a in self.queue.items if a.status == "approved"}
+        try:
+            return after_run(customer_id, events, approvals=approved, memory_dir=self._memory_dir)
+        except Exception as e:
+            return {"error": f"{type(e).__name__}: {e}"[:300]}
 
     def _pick_planner(self, offline: bool) -> Planner:
         if self._planner_override is not None:
