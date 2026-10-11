@@ -69,8 +69,12 @@ flags. Keep them synthetic; coordinate the flag names with B.
 
 ## 2. Planner agent (`attack/agent/`)
 
-Claude doing ordinary security *analysis*: given context, choose and order scenarios.
-It never sees a tool that sends traffic — it only emits scenario IDs.
+**The planner is Claude — this is the product's point, not a swappable detail.** It does
+ordinary security *analysis*: given the customer's memory, the code diff and the shared
+lessons, it chooses and orders which scenarios are worth running this cycle. The reasoning
+is non-deterministic by design — a different diff or memory state yields a different plan,
+and that is what makes the loop self-improving. It never sees a tool that sends traffic; it
+only emits scenario IDs, which the deterministic engine (§3) then executes.
 
 **Input** (`PlanRequest`): bounded objective; relevant `customer-X.md` sections (§2 assets/
 invariants, §3 recent changes, §4 observed events, §9 next tests); a code diff summary;
@@ -100,9 +104,26 @@ change-recency (scenarios touching changed surfaces first) · novelty · known h
 - The plan is truncated to `budget.max_scenarios`.
 - Model output is **data**: it selects IDs; the harness, not the model, decides execution.
 
-`agent/client.py` wraps the Anthropic SDK (model id `claude-opus-5-5` for planning; a
-cheaper id is fine for interpretation). A `DummyPlanner` returning a deterministic plan
-lets the rest of the pipeline run offline and in tests.
+**Implementation.** `agent/planner.py` defines a `Planner` protocol with one method
+`plan(request: PlanRequest) -> TestPlan`. Two implementations:
+- `ClaudePlanner` (`agent/client.py`) — the real one, used in the demo. Wraps the Anthropic
+  SDK. The model id is **config-driven**, read from `ANTHROPIC_MODEL` (default: the latest
+  Opus, e.g. `claude-opus-5-5`); never hardcode it in call sites, so a model change is a
+  one-line env edit. The API key is read from `ANTHROPIC_KEY` (`.env`, gitignored). Use the
+  SDK's structured-output / tool-use so the response decodes straight into `TestPlan`; on a
+  decode failure, retry once, then fall back to `DummyPlanner` and mark the plan
+  `degraded=True` in `attrs` rather than crashing the demo.
+- `DummyPlanner` — a deterministic hard-coded plan. **Test and fallback only**, not the demo
+  path. Because the whole pipeline after the plan is deterministic (§3–§4), its downstream
+  output is identical to Claude's; only the *choice* of scenarios loses its intelligence.
+  Keep it behind a `--dummy-planner` flag so you can flip to it instantly if the network or
+  key fails on stage.
+
+**Prompt contract.** The system prompt frames the task as defensive security analysis over
+*our own* demo systems, states the safety model (select scenario IDs only; never produce an
+exploit), and supplies the catalog entries as data. The user turn carries the `PlanRequest`
+context. Keep the prompt in `agent/prompts.py` so it's reviewable and versionable; stamp a
+`prompt_version` onto the `swarm.plan` event for reproducibility.
 
 ---
 
@@ -266,7 +287,7 @@ in memory and serves slices.
 2. `engine/` against `FakeSite`; `ProbeResult` captured end to end.
 3. `verify/` with the §4 table; unit tests for each cell.
 4. `harness/` wiring + `DummyPlanner`; budgets + `swarm.*` events into `FakeKeewano`.
-5. `agent/` real planner with structured output; keep `DummyPlanner` for tests.
+5. `agent/` real `ClaudePlanner` with structured output; keep `DummyPlanner` as fallback.
 6. Swap fakes for real `SiteClient`/`KeewanoClient` at integration.
 
 ## 9. Acceptance criteria (from `docs/dev-A-...md` §5)

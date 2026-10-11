@@ -14,6 +14,7 @@ Built at SpeedHacks (SF Tech Week, Oct 11 2026) with Alike, Keewano, Sparta, Dia
 | `sites/` | Dev B | The 3 demo customer sites (local only) |
 | `keewano/` | Dev B | Event store and read API |
 | `attack/` | Dev A | Harness, planner, probe engine, catalog, verification |
+| `dashboard/` | Dev A (shared) | Demo UI over the whole loop (`docs/dashboard-spec.md`) |
 | `distill/` | Dev C | Customer analysis, shared updater, privacy |
 | `memory/` | Dev C | `customer-X.md` pages and `shared-intelligence.md` |
 
