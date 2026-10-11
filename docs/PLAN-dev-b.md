@@ -54,11 +54,13 @@ and `fixtures/events/` (nothing yet for M2–M8).
   - **Depends on:** M2; Keewano ingestion method (SDK or REST) and credentials; project-per-tenant
     decision.
 
-- [ ] **M4: Site A (customer-a, e-commerce, port 3001)**
+- [x] **M4: Site A (customer-a, e-commerce, port 3001)** *(done 2026-10-11; revision in `sites/customer_a/config.py`)*
   - **Build:** minimal FastAPI app: login, orders, password reset; `GET /__meta`; emits organic
     events through `contracts.validate_event` to the store; exposes `code_revision`.
   - **Verify:** normal usage produces valid events in the store; `/__meta` shape matches §4a.1.
   - **Depends on:** M2 (M3 for end-to-end checks).
+  - **Notes:** fail-safe emitter in `sites/common/emitter.py` (bounded queue, local fallback log),
+    shared by sites B and C. `/__meta` reports `flags: {}` until M5.
 
 - [ ] **M5: Flags, registry and probe handling**
   - **Build:** `contracts/flags.yaml` for all three customers (nine flags, §4a.3); `PUT /__flags`
