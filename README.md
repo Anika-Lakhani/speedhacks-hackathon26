@@ -16,3 +16,15 @@ Built at SpeedHacks (SF Tech Week, Oct 11 2026) with Alike, Keewano, Sparta, Dia
 | `attack/` | Dev A | Harness, planner, probe engine, catalog, verification |
 | `distill/` | Dev C | Customer analysis, shared updater, privacy |
 | `memory/` | Dev C | `customer-X.md` pages and `shared-intelligence.md` |
+
+## Setup
+
+Python 3.12+, managed with [uv](https://docs.astral.sh/uv/):
+
+```sh
+uv sync            # create .venv and install deps
+uv run pytest      # run tests
+uv run ruff check  # lint
+```
+
+Add a dependency with `uv add <pkg>` and commit `pyproject.toml` and `uv.lock` together.
