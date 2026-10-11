@@ -48,13 +48,17 @@ def test_a_reads_knowledge_version_and_no_lessons_from_empty_corpus(tmp_path, ca
 
 
 def test_only_active_items_reach_the_planner(tmp_path, catalog):
-    text = render_shared_scaffold().replace(
-        "## Generalized attack patterns & preconditions\n",
-        "## Generalized attack patterns & preconditions\n\n### SI-0001\n"
-        "applicability: idor, bola\nCheck object ownership on per-user resources.\n",
-    ).replace(
-        "## Pending contributions\n",
-        "## Pending contributions\n\n#### SI-0002\napplicability: idor\nUnder review.\n",
+    text = (
+        render_shared_scaffold()
+        .replace(
+            "## Generalized attack patterns & preconditions\n",
+            "## Generalized attack patterns & preconditions\n\n### SI-0001\n"
+            "applicability: idor, bola\nCheck object ownership on per-user resources.\n",
+        )
+        .replace(
+            "## Pending contributions\n",
+            "## Pending contributions\n\n#### SI-0002\napplicability: idor\nUnder review.\n",
+        )
     )
     (tmp_path / "shared-intelligence.md").write_text(text)
     # the idor lesson from customer-a's family reaches customer-b (bola), not customer-c

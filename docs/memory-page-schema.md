@@ -15,6 +15,33 @@ Create missing pages with `uv run python -m distill.scaffold` (never overwrites;
   by the customer-analysis agent through section patches, never full rewrites.
 - A's planner reads §2, §3, §4, §7, §9. Empty sections are skipped.
 
+### Entries (written by `distill/customer_analysis`)
+
+One bullet line per entry: `` - `KEY` [label] text (field: value, field: value) ``.
+`label` is an evidence label (overview §5.2). The trailing fields are the state the analyzer
+merges on its next pass; list values are space-separated. §1 uses plain `- name: value` lines.
+Entries are upserted or removed by key; other lines (e.g. the §2 profile) are never touched.
+
+| § | Key | Meaning |
+|---|---|---|
+| 1 | `tested_revision`, `last_distilled`, `knowledge_version_seen` | latest revision, event time, knowledge version |
+| 3 | `REV-<revision>` | a code revision, first seen time, change summary and surfaces if supplied |
+| 4 | `OBS-<event_type>-<deny\|flag>` | organic deny/flag events, with event refs (first 8 chars of `event_id`) |
+| 5 | `F-<scenario_id>` | a confirmed finding: `status` open / fixed / contradicted, confirming runs, `evidence_ref` |
+| 6 | `HYP-<weakness_class>` | weakness suggested by organic signals; `status` open / confirmed / not_reproduced |
+| 6 | `PRB-<scenario_id>` | vulnerable probe response with no verdict yet (a lead, not a finding) |
+| 7 | `RUN-<run_id>` | one swarm run: revision, planner, per-scenario verdicts or probe outcomes |
+| 8 | `REG-<scenario_id>`, `DEF-<scenario_id>` | regression test for a finding (failing/passing); invariant seen holding |
+| 9 | `NEXT-<scenario_id>`, `GAP-<weakness_class>` | next test to run (removed once tested); class with no catalog scenario |
+| 10 | `CL-<weakness_class>` | candidate lesson; `sharing` proposed / approved (human) / hold (contradicted) |
+
+A finding is `reproduced` when Dev A confirms it and `verified` only after a human approves it
+(`attack.harness approve`, read from `.swarmshield/approvals.json`).
+
+Run it: `uv run python -m distill.customer_analysis --customer customer-a --events
+fixtures/events/customer-a.jsonl --dry-run` (or `--keewano http://localhost:4000` once Dev B's
+read API is live). It prints the patch as a diff and applies it unless `--dry-run`.
+
 ## `memory/shared-intelligence.md`
 
 - `knowledge_version: <x.y.z>` near the top, before any item. A stamps it on every run.
