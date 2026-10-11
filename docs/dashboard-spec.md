@@ -5,7 +5,7 @@ from B (Keewano, site flags) and C (Markdown memory) and triggers A (a run).
 **Read first:** `swarmshield-mvp-overview.md` (§3 dependency flow, §6 definition of done).
 
 The system is Markdown files and event rows, which don't demo well. This dashboard makes the
-self-improving loop *visible*: toggle a weakness, trigger a run, watch Claude choose what to
+self-improving loop *visible*: toggle a weakness, trigger a run, watch Gemini choose what to
 test, watch verdicts land, watch the customer's memory update, and — the payoff — watch a
 lesson generalize to another customer. It contains **no business logic**; it is a thin view
 over data the three components already produce, plus one button that calls A's run API.
@@ -20,8 +20,8 @@ The dashboard exists to tell this story on stage, in order:
    its memory page (`customer-a.md`) with known findings and "next tests".
 2. **Something changed / is vulnerable.** Toggle `idor_orders` **on** (a stand-in for a bad
    deploy introducing a weakness).
-3. **Claude decides what to test.** Hit **Run**. The plan panel shows the scenarios Claude
-   chose *and its rationale* — visibly prioritizing the changed/risky surface.
+3. **Gemini decides what to test.** Hit **Run**. The plan panel shows the scenarios the
+   planner chose *and its rationale* — visibly prioritizing the changed/risky surface.
 4. **The system tests itself safely.** Verdicts stream in: `SCN-IDOR-001 → confirmed`,
    others `not_reproduced`. Every row is a `simulated` probe, never a real attack.
 5. **The memory improves.** `customer-a.md` updates with the new confirmed finding and a new
@@ -82,7 +82,7 @@ dashboard/  (FastAPI, port 8000) ───────────┤  thin aggr
 | **Flags** | `/meta` + `PUT /flags` | each flag as a toggle; flipping calls B's `/__flags` |
 | **Memory** | `/memory` | rendered `customer-X.md`; highlight §5 confirmed, §9 next tests |
 | **Run control** | `POST /run` | objective (preset), budget, **Run** button, `--dummy-planner` toggle |
-| **Plan** | events `swarm.plan` | Claude's chosen scenarios + rationale + priority |
+| **Plan** | events `swarm.plan` | the planner's chosen scenarios + rationale + priority |
 | **Live verdicts** | events `swarm.probe`/`swarm.verdict` | table: scenario · verdict · flag state · confidence; color by verdict |
 | **Shared intel** | `/shared` | `shared-intelligence.md` summary + `knowledge_version`; new/updated items flagged |
 
@@ -123,6 +123,6 @@ fixture Markdown, so it can be built and demoed standalone.
 
 - One command brings up sites + Keewano + dashboard (`make demo` or `docker compose up`).
 - Seed state: `customer-a` has one pre-existing finding so memory isn't empty at open.
-- `.env` has `ANTHROPIC_KEY`; `--dummy-planner` toggle verified as a fallback.
+- `.env` has `GEMINI_API_KEY`; `--dummy-planner` toggle verified as a fallback.
 - Rehearse the six beats; have the cross-customer finale working or cut it cleanly.
 - Keep a recorded screen capture as a backup if live services fail.
