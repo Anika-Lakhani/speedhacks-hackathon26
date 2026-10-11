@@ -1,5 +1,6 @@
 # SwarmShield — Pitch Deck Content
 
+> Original source content used for the Lovable draft. The current deck lives in `pitch/deck/` (Claude Slides artifact); this file is kept for reference.
 > Source content for the SpeedHacks 2026 pitch deck. Each `## Slide` section is one slide.
 > **On-slide copy** is what appears on the slide. **Visual** describes the layout.
 > **Speaker notes** go in the slide's presenter notes, not on the slide.
@@ -104,7 +105,7 @@ Here's the loop. A code change ships. An AI planner reads what changed and what 
 
 - Headline: How we built it
 - Pipeline (horizontal, four boxes):
-  **Keewano** memory & event log → **Planner** (Claude[ / Darwin]) → **Probe engine** → **Deterministic verifier** → back to **Keewano**
+  **Keewano** memory & event log → **Planner** (Gemini) → **Probe engine** → **Deterministic verifier** → back to **Keewano**
 - Guardrails (short list, icon per item):
   - Scenario + target allowlists — the AI can't invent attacks or targets
   - Hard budgets enforced in code — 12 scenarios, 120 s, $1 per run
@@ -120,7 +121,7 @@ Here's the loop. A code change ships. An AI planner reads what changed and what 
 Top half: the pipeline as connected boxes. Bottom-left: guardrails list. Bottom-right or bottom strip: sponsor logo placeholders, each with a one-line role caption. Use clear placeholder boxes for any sponsor marked conditional.
 
 **Speaker notes**
-Under the hood: Keewano stores every event and each customer's security memory. A Claude planner ranks scenarios from a fixed catalog — it returns scenario IDs, not code. A probe engine executes only allowlisted, benign requests, and a deterministic verifier compares the response against ground truth. Budgets are enforced in code, not in the prompt, and nothing becomes "verified" without a human. Every confirmed finding can be replayed from its stored evidence. [Add one sentence per sponsor actually used.]
+Under the hood: Keewano stores every event and each customer's security memory. A Gemini planner ranks scenarios from a fixed catalog — it returns scenario IDs, not code. A probe engine executes only allowlisted, benign requests, and a deterministic verifier compares the response against ground truth. Budgets are enforced in code, not in the prompt, and nothing becomes "verified" without a human. Every confirmed finding can be replayed from its stored evidence. [Add one sentence per sponsor actually used.]
 
 ---
 
@@ -177,7 +178,7 @@ Our customer is a Series A to C B2B SaaS company at its first enterprise deal �
 
 - Headline (large, centered): **A security team of one gets a swarm.**
 - Subline: SwarmShield — continuous pentesting for every release.
-- Small: [TEAM NAMES] · [GITHUB REPO URL] · Built at SpeedHacks, SF Tech Week 2026
+- Small: Eleyn Xiong · Sriya Sthanikam · Anika Lakhani · github.com/Anika-Lakhani/speedhacks-hackathon26 · Built at SpeedHacks, SF Tech Week 2026
 
 **Visual**
 Dark slide, centered headline, subtle swarm/particle motif behind it.
