@@ -153,31 +153,9 @@ def render_customer_scaffold(customer_id: str) -> str:
 
 def render_shared_scaffold() -> str:
     """A fresh shared corpus: version header, taxonomy, empty sections."""
-    taxonomy = "\n".join(
-        f"| `{family}` | {', '.join(f'`{c}`' for c in classes)} |"
-        for family, classes in TAXONOMY.items()
-    )
-    body = {
-        "Taxonomy & version": (
-            "| Family | Weakness classes |\n|---|---|\n" + taxonomy + "\n\n"
-            "Active items are `### <id>` headings. Pending, quarantined and retired items are\n"
-            "`#### <id>` so the attack planner never reads them as live lessons."
-        ),
-        "Change log": f"- {INITIAL_KNOWLEDGE_VERSION}: corpus created (empty).",
-    }
-    parts = [
-        "# Shared intelligence",
-        "",
-        f"knowledge_version: {INITIAL_KNOWLEDGE_VERSION}",
-        f"page_schema: {PAGE_SCHEMA_VERSION}",
-        "",
-        "<!-- Maintained by distill/shared_updater. Contains no tenant-identifying data. -->",
-    ]
-    for title in SHARED_SECTIONS:
-        parts += ["", f"## {title}", ""]
-        if title in body:
-            parts.append(body[title])
-    return "\n".join(parts).rstrip() + "\n"
+    from distill.shared_updater.corpus import Corpus, render_shared  # avoids an import cycle
+
+    return render_shared(Corpus())
 
 
 def parse_customer_sections(text: str) -> dict[int, str]:

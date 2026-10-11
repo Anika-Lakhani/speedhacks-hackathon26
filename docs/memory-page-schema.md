@@ -55,6 +55,31 @@ read API is live). It prints the patch as a diff and applies it unless `--dry-ru
   catalog classes, and treats `any` or `all` anywhere in the line as "every customer", so
   applicability lines name classes only.
 
+### Shared updater (`distill/shared_updater`)
+
+`shared-intelligence.md` is generated from `memory/shared/corpus.json`; never edit it by hand.
+Every version is snapshotted in `memory/shared/history/`, every change is appended to
+`memory/shared/audit.jsonl` (minimized evidence + authorizing policy `shared-policy/1`).
+
+```sh
+uv run python -m distill.shared_updater approve --customer customer-a --class idor  # human gate
+uv run python -m distill.shared_updater update [--dry-run]   # promote approved §10 candidates
+uv run python -m distill.shared_updater retract <item-id> --reason "..."
+uv run python -m distill.shared_updater rollback <knowledge_version>
+uv run python -m distill.shared_updater audit                 # privacy audit of the shared page
+```
+
+- Reads only §10 `CL-*` lines with `sharing: approved` and label `reproduced`/`verified`.
+- Item text comes from per-weakness templates (`lessons.py`), never from customer pages. `idor`
+  and `bola` share one lesson, so findings from two tenants merge into one item.
+- Candidates carrying secrets or PII, unknown classes, and contributions to retracted items are
+  quarantined (`#### Q-…` under Pending contributions; the content stays on the customer page).
+- Evidence gate: one tenant, one confirmation → `confidence: low`; two confirmations → `medium`;
+  two tenants → `high`. `evidence_level: verified` needs a human-verified source and ≥2
+  confirmations.
+- Provenance is an HMAC token per tenant keyed by `SWARMSHIELD_PROVENANCE_SALT` (or a generated
+  `.data/provenance.salt`); tenant names never appear in the corpus, history or audit log.
+
 ### Taxonomy
 
 Weakness classes match `weakness_class` in Dev A's scenario catalog, grouped into families so a
