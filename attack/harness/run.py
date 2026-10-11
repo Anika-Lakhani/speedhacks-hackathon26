@@ -154,6 +154,7 @@ def run(
                 "model": plan.model,
                 "prompt_version": plan.prompt_version,
                 "degraded": plan.degraded,
+                "planner_error": plan.error,
             },
         )
         tracker.add_spend(plan.cost_usd)

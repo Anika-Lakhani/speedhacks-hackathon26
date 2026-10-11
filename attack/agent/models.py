@@ -60,3 +60,4 @@ class TestPlan(PlanOutput):
     degraded: bool = False
     cost_usd: float = 0.0
     dropped_ids: list[str] = []
+    error: str | None = None  # why the planner degraded, if it did

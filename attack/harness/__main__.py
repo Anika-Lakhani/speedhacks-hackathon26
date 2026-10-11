@@ -52,6 +52,8 @@ def cmd_run(args) -> int:
     )
     planner = DummyPlanner() if args.dummy_planner else GeminiPlanner()
     report = run(config, planner, site, keewano, catalog, ApprovalQueue(DEFAULT_QUEUE_PATH))
+    if report.plan.degraded:
+        print(f"WARNING: planner degraded to fallback: {report.plan.error}", file=sys.stderr)
     print(report.model_dump_json(indent=2))
     return 0
 

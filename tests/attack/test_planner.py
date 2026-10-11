@@ -132,6 +132,7 @@ def test_gemini_planner_falls_back_degraded(catalog):
     client = FakeGemini([{"bad": 1}, ConnectionError("no network")])
     plan = GeminiPlanner(client=client).plan(request(catalog))
     assert plan.degraded and plan.planner == "dummy-fallback" and plan.steps
+    assert "ConnectionError" in plan.error
 
 
 def test_safety_filtered_reply_falls_back(catalog):

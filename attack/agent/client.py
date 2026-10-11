@@ -8,7 +8,7 @@ from attack.agent.models import PlanOutput, PlanRequest, TestPlan
 from attack.agent.planner import DummyPlanner, sanitize_plan
 from attack.agent.prompts import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
 
-DEFAULT_MODEL = "gemini-2.5-pro"
+DEFAULT_MODEL = "gemini-2.5-flash"
 # Rough $/Mtok used only for the budget tracker's spend estimate; override via env.
 DEFAULT_PRICE_IN = 1.25
 DEFAULT_PRICE_OUT = 10.0
@@ -75,10 +75,12 @@ class GeminiPlanner:
 
     def plan(self, request: PlanRequest) -> TestPlan:
         cost = 0.0
+        last_error = None
         for _ in range(2):  # one retry on a decode failure
             try:
                 output, spent = self._call(request)
-            except Exception:  # decode, filter, network or auth failure: retry once, then degrade
+            except Exception as e:  # decode, filter, network or auth failure: retry, then degrade
+                last_error = f"{type(e).__name__}: {e}"[:300]
                 continue
             cost += spent
             plan = TestPlan(
@@ -97,5 +99,6 @@ class GeminiPlanner:
                 "model": self.model,
                 "prompt_version": PROMPT_VERSION,
                 "cost_usd": cost,
+                "error": last_error,
             }
         )
