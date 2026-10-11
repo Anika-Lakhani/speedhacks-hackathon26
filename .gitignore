@@ -7,3 +7,4 @@ dist/
 build/
 .env
 .data/
+.DS_Store
