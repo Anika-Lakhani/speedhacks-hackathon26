@@ -122,9 +122,68 @@ def _finish(corpus: Corpus, audit: list[dict[str, Any]], today: date, summary: s
     return Outcome(corpus, audit)
 
 
+def _merge(corpus: Corpus, contrib: Contribution, today: date) -> dict[str, Any] | None:
+    """Merge one eligible, scanned contribution into its item. Returns the audit record, or
+    None when it adds nothing. An expired item comes back only on changed evidence."""
+    c = contrib.candidate
+    lesson = LESSON_FOR_CLASS[c.weakness_class]
+    item = corpus.items.get(lesson.id)
+    source = Source(label=c.label, confirmations=c.confirmations)
+    if item and item.sources.get(contrib.source) == source:
+        return None  # nothing new from this tenant (an unchanged page can't revive an item)
+    sources = {**(item.sources if item else {}), contrib.source: source}
+    level, confidence = _evidence(sources)
+    merged = Item(
+        id=lesson.id,
+        version=item.version + 1 if item else 1,
+        status="active",
+        evidence_level=level,
+        confidence=confidence,
+        applicability=list(lesson.classes),
+        last_validation=today,
+        expiry=today + EXPIRY,
+        sources=sources,
+    )
+    hits = sorted({f"{h.kind}:{h.rule}" for h in scan(render_item(merged))})
+    if hits:
+        return _record("blocked", today, item=lesson.id, reasons=hits)
+    action = "add" if item is None else "revalidate" if item.status == "expired" else "merge"
+    corpus.items[lesson.id] = merged
+    return _record(
+        action,
+        today,
+        item=lesson.id,
+        item_version=merged.version,
+        evidence={
+            "weakness_class": c.weakness_class,
+            "label": c.label,
+            "confirmations": c.confirmations,
+            "source": contrib.source,
+        },
+        result={"evidence_level": level, "confidence": confidence},
+    )
+
+
+def _expire(corpus: Corpus, today: date) -> list[dict[str, Any]]:
+    """Active items past their expiry stop reaching the planner until revalidated."""
+    audit = []
+    for item in corpus.items.values():
+        if item.status == "active" and item.expiry < today:
+            item.status, item.version = "expired", item.version + 1
+            item.note = f"expired {item.expiry}; awaiting fresh evidence"
+            audit.append(_record("expire", today, item=item.id, item_version=item.version))
+    return audit
+
+
+def _summary(audit: list[dict[str, Any]], fallback: str) -> str:
+    return "; ".join(f"{r['action']} {r['item']}" for r in audit if r["action"] != "blocked") or (
+        fallback
+    )
+
+
 def contribute(corpus: Corpus, contributions: list[Contribution], today: date) -> Outcome:
     corpus = corpus.model_copy(deep=True)
-    audit: list[dict[str, Any]] = []
+    audit = _expire(corpus, today)
     queued = {q.id for q in corpus.quarantine}
 
     def quarantine(contrib: Contribution, reasons: list[str]) -> None:
@@ -132,13 +191,12 @@ def contribute(corpus: Corpus, contributions: list[Contribution], today: date) -
         digest = hashlib.sha256(f"{contrib.source}|{c.line}".encode()).hexdigest()[:10]
         qid = f"Q-{digest}"
         if qid in queued:
-            return
+            return  # already queued, released or rejected: a human has it
         queued.add(qid)
-        cls = clean(c.weakness_class, 40)
         corpus.quarantine.append(
             Quarantined(
                 id=qid,
-                weakness_class=cls,
+                weakness_class=clean(c.weakness_class, 40),
                 source=contrib.source,
                 candidate_key=clean(c.key, 60),
                 reasons=reasons,
@@ -159,51 +217,82 @@ def contribute(corpus: Corpus, contributions: list[Contribution], today: date) -
             quarantine(contrib, reasons)
             continue
         item = corpus.items.get(lesson.id)
-        if item and item.status != "active":
+        if item and item.status in ("retracted", "superseded"):
             quarantine(contrib, [f"contributes_to_{item.status}_item"])
             continue
-        source = Source(label=c.label, confirmations=c.confirmations)
-        if item and item.sources.get(contrib.source) == source:
-            continue  # nothing new from this tenant
-        sources = {**(item.sources if item else {}), contrib.source: source}
-        level, confidence = _evidence(sources)
-        candidate_item = Item(
-            id=lesson.id,
-            version=item.version + 1 if item else 1,
-            status="active",
-            evidence_level=level,
-            confidence=confidence,
-            applicability=list(lesson.classes),
-            last_validation=today,
-            expiry=today + EXPIRY,
-            sources=sources,
-        )
-        hits = sorted({f"{h.kind}:{h.rule}" for h in scan(render_item(candidate_item))})
-        if hits:
-            audit.append(_record("blocked", today, item=lesson.id, reasons=hits))
-            continue
-        corpus.items[lesson.id] = candidate_item
-        audit.append(
-            _record(
-                "merge" if item else "add",
-                today,
-                item=lesson.id,
-                item_version=candidate_item.version,
-                evidence={
-                    "weakness_class": c.weakness_class,
-                    "label": c.label,
-                    "confirmations": c.confirmations,
-                    "source": contrib.source,
-                },
-                result={"evidence_level": level, "confidence": confidence},
-            )
-        )
+        if record := _merge(corpus, contrib, today):
+            audit.append(record)
 
-    summary = (
-        "; ".join(f"{r['action']} {r['item']}" for r in audit if r["action"] != "blocked")
-        or "blocked contributions only"
-    )
-    return _finish(corpus, audit, today, summary)
+    return _finish(corpus, audit, today, _summary(audit, "blocked contributions only"))
+
+
+def pending_review(corpus: Corpus) -> list[Quarantined]:
+    return [q for q in corpus.quarantine if q.status == "pending_review"]
+
+
+def release(corpus: Corpus, qid: str, contrib: Contribution, note: str, today: date) -> Outcome:
+    """A human judged a quarantined contribution safe (e.g. a scanner false positive). It is
+    merged through the normal path, so the rendered item still has to pass every gate."""
+    corpus = corpus.model_copy(deep=True)
+    q = _pending(corpus, qid)
+    c = contrib.candidate
+    if (contrib.source, clean(c.key, 60)) != (q.source, q.candidate_key):
+        raise ValueError(f"{qid} came from a different contribution")
+    if "unknown_weakness_class" in q.reasons or c.weakness_class not in LESSON_FOR_CLASS:
+        raise ValueError(f"{qid} has no lesson template for its weakness class; reject it")
+    if any(r.startswith("contributes_to_") for r in q.reasons):
+        raise ValueError(f"{qid} targets a retired item; it can't be released into it")
+    item = corpus.items.get(LESSON_FOR_CLASS[c.weakness_class].id)
+    if item and item.status in ("retracted", "superseded"):
+        raise ValueError(f"{qid} targets a {item.status} item; it can't be released into it")
+    note = _safe_note(note)
+    record = _merge(corpus, contrib, today)
+    if record and record["action"] == "blocked":
+        raise ValueError(f"{qid} would render an item that fails the privacy gates")
+    q.status = "released"
+    audit = [_record("release", today, item=qid, note=note)]
+    if record:
+        audit.append(record)
+    return _finish(corpus, audit, today, _summary(audit, f"release {qid}"))
+
+
+def reject(corpus: Corpus, qid: str, note: str, today: date) -> Outcome:
+    corpus = corpus.model_copy(deep=True)
+    q = _pending(corpus, qid)
+    q.status = "rejected"
+    audit = [_record("reject", today, item=qid, note=_safe_note(note))]
+    return _finish(corpus, audit, today, f"reject {qid}")
+
+
+def _pending(corpus: Corpus, qid: str) -> Quarantined:
+    for q in corpus.quarantine:
+        if q.id == qid and q.status == "pending_review":
+            return q
+    raise KeyError(f"nothing pending review with id {qid}")
+
+
+def _safe_note(note: str) -> str:
+    note = clean_text(note, 160)
+    if hits := scan(note):
+        raise ValueError(f"note fails privacy gates: {sorted({h.rule for h in hits})}")
+    return note
+
+
+def supersede(corpus: Corpus, old_id: str, new_id: str, reason: str, today: date) -> Outcome:
+    """Replace an active item with another active one, keeping the old one for the record."""
+    corpus = corpus.model_copy(deep=True)
+    old, new = corpus.items.get(old_id), corpus.items.get(new_id)
+    if old is None or old.status != "active":
+        raise KeyError(f"no active item {old_id}")
+    if new is None or new.status != "active" or new_id == old_id:
+        raise KeyError(f"{new_id} must be a different active item")
+    reason = _safe_note(reason)
+    old.status, old.version = "superseded", old.version + 1
+    old.note = f"superseded by {new_id}: {reason}"
+    audit = [
+        _record("supersede", today, item=old_id, item_version=old.version, by=new_id, reason=reason)
+    ]
+    return _finish(corpus, audit, today, f"supersede {old_id} by {new_id}")
 
 
 def retract(corpus: Corpus, item_id: str, reason: str, today: date) -> Outcome:
@@ -211,11 +300,9 @@ def retract(corpus: Corpus, item_id: str, reason: str, today: date) -> Outcome:
     quarantined rather than reviving it."""
     corpus = corpus.model_copy(deep=True)
     item = corpus.items.get(item_id)
-    if item is None or item.status != "active":
-        raise KeyError(f"no active item {item_id}")
-    reason = clean_text(reason, 160)
-    if hits := scan(reason):
-        raise ValueError(f"reason fails privacy gates: {sorted({h.rule for h in hits})}")
+    if item is None or item.status not in ("active", "expired"):
+        raise KeyError(f"no active or expired item {item_id}")
+    reason = _safe_note(reason)
     item.status, item.note, item.version = "retracted", reason, item.version + 1
     audit = [_record("retract", today, item=item_id, item_version=item.version, reason=reason)]
     return _finish(corpus, audit, today, f"retract {item_id}")

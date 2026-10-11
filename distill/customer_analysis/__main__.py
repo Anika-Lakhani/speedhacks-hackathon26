@@ -3,8 +3,10 @@
     uv run python -m distill.customer_analysis --customer customer-a \\
         --events fixtures/events/customer-a.jsonl [--dry-run]
     uv run python -m distill.customer_analysis --customer customer-a \\
-        --keewano http://localhost:4000 [--since 2026-10-11T00:00:00Z]
+        --keewano http://localhost:4000 [--since T | --since-revision REV | --full]
 
+With --keewano it reads every page of the window from Dev B's read API. By default the window
+starts at the page's `last_distilled` time, so repeated runs only distill what is new.
 Prints the patch as a unified diff and applies it unless --dry-run.
 """
 
@@ -13,20 +15,31 @@ import json
 import sys
 from pathlib import Path
 
+import httpx
+
 from attack.catalog import load_catalog
 from distill.customer_analysis.analyze import Change, analyze
-from distill.customer_analysis.patch import apply_patch, render_diff
+from distill.customer_analysis.patch import apply_patch, read_entries, render_diff
+from distill.customer_analysis.source import EventSource
 from distill.scaffold import MEMORY_DIR
 
 APPROVALS_PATH = Path(".swarmshield") / "approvals.json"
 
 
-def load_events(args) -> list:
+def last_distilled(page_text: str) -> str | None:
+    line = read_entries(page_text).get(1, {}).get("last_distilled", "")
+    value = line.partition(":")[2].strip()
+    return None if value in ("", "never") else value
+
+
+def load_events(args, page_text: str, source: EventSource | None = None) -> list:
     if args.events:
         return [json.loads(line) for line in Path(args.events).read_text().splitlines() if line]
-    from attack.clients import KeewanoClient  # only needed for the live path
-
-    return KeewanoClient(args.keewano).get_slice(args.customer, since=args.since, limit=args.limit)
+    source = source or EventSource(args.keewano)
+    if args.since_revision:
+        return source.window(args.customer, revision=args.since_revision)
+    since = args.since or (None if args.full else last_distilled(page_text))
+    return source.window(args.customer, since=since)
 
 
 def load_approvals(path: Path) -> set[tuple[str, str]]:
@@ -39,14 +52,16 @@ def load_approvals(path: Path) -> set[tuple[str, str]]:
     }
 
 
-def main(argv=None) -> int:
+def main(argv=None, source: EventSource | None = None) -> int:
     p = argparse.ArgumentParser(prog="distill.customer_analysis")
     p.add_argument("--customer", required=True)
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--events", help="JSONL file of events")
     src.add_argument("--keewano", help="event store base URL, e.g. http://localhost:4000")
-    p.add_argument("--since", help="RFC 3339 lower bound for --keewano")
-    p.add_argument("--limit", type=int, default=500)
+    window = p.add_mutually_exclusive_group()
+    window.add_argument("--since", help="RFC 3339 lower bound for --keewano (inclusive)")
+    window.add_argument("--since-revision", help="events from this code_revision onward")
+    window.add_argument("--full", action="store_true", help="ignore last_distilled; read all")
     p.add_argument("--change-revision", help="revision the change metadata below describes")
     p.add_argument("--change-summary", default="")
     p.add_argument("--changed-surface", action="append", default=[], help="e.g. /orders")
@@ -63,9 +78,18 @@ def main(argv=None) -> int:
     if args.change_revision:
         changes.append(Change(args.change_revision, args.change_summary, args.changed_surface))
     before = page.read_text()
+    try:
+        events = load_events(args, before, source)
+    except httpx.HTTPStatusError as e:
+        detail = e.response.text[:200]
+        print(f"event store returned {e.response.status_code}: {detail}", file=sys.stderr)
+        return 1
+    except httpx.TransportError as e:
+        print(f"event store unreachable at {args.keewano}: {e}", file=sys.stderr)
+        return 1
     result = analyze(
         args.customer,
-        load_events(args),
+        events,
         before,
         load_catalog(),
         changes=changes,

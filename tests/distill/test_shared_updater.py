@@ -1,13 +1,13 @@
 """Shared updater: eligibility, privacy, merge, evidence gate, audit, quarantine, rollback."""
 
 import json
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
 from attack.harness import context as a_context
 from distill.customer_analysis.analyze import analyze
-from distill.customer_analysis.patch import apply_patch
+from distill.customer_analysis.patch import Op, Patch, apply_patch
 from distill.privacy.provenance import source_token
 from distill.privacy.scanners import scan
 from distill.scaffold import scaffold
@@ -19,8 +19,11 @@ from distill.shared_updater.update import (
     Contribution,
     contribute,
     read_candidates,
+    reject,
+    release,
     retract,
     rollback,
+    supersede,
 )
 from tests.distill.test_customer_analysis import swarm_run
 
@@ -252,3 +255,98 @@ def test_contradicted_candidate_cannot_be_approved(tmp_path, catalog):
         )
         == 1
     )
+
+
+# ---- expiry, quarantine review, supersession ---------------------------------------------
+
+
+LATER = TODAY + timedelta(days=91)
+PHONE = " +1 415-555-0134"  # trips the PII gate
+
+
+def test_expired_item_leaves_the_planner_until_new_evidence(tmp_path, catalog):
+    added = run(Contribution(A, cand()))
+    expired = contribute(added.corpus, [Contribution(A, cand())], LATER)
+    item = expired.corpus.items[OBJ]
+    assert item.status == "expired" and [r["action"] for r in expired.audit] == ["expire"]
+    store_page(tmp_path, expired.corpus)
+    assert a_context.read_shared_lessons("customer-b", catalog, tmp_path) == []
+    assert "#### SI-object_access_authz" in render_shared(expired.corpus)
+    fresh = contribute(expired.corpus, [Contribution(A, cand(confirmations=2))], LATER)
+    item = fresh.corpus.items[OBJ]
+    assert item.status == "active" and item.expiry == LATER + timedelta(days=90)
+    assert [r["action"] for r in fresh.audit] == ["revalidate"]
+
+
+def test_release_merges_a_false_positive_and_it_stays_resolved():
+    contrib = Contribution(A, cand(extra=PHONE))
+    held = run(contrib)
+    (q,) = held.corpus.quarantine
+    out = release(held.corpus, q.id, contrib, "sample number, not PII", TODAY)
+    assert out.corpus.items[OBJ].status == "active"
+    assert out.corpus.quarantine[0].status == "released"
+    assert [r["action"] for r in out.audit] == ["release", "add"]
+    assert PHONE.strip() not in render_shared(out.corpus)
+    assert not contribute(out.corpus, [contrib], TODAY).changed  # not re-queued
+
+
+@pytest.mark.parametrize(
+    "setup,match",
+    [
+        ("other_source", "different contribution"),
+        ("unknown_class", "no lesson template"),
+        ("retracted", "retracted item"),
+    ],
+)
+def test_release_refuses_unsafe_cases(setup, match):
+    cls = "quantum_tunnel" if setup == "unknown_class" else "idor"
+    contrib = Contribution(A, cand(cls=cls, extra=PHONE))
+    corpus = run(contrib).corpus
+    qid = corpus.quarantine[0].id
+    if setup == "other_source":
+        contrib = Contribution(B, contrib.candidate)
+    if setup == "retracted":
+        corpus = run(Contribution(B, cand("bola")), corpus=corpus).corpus
+        corpus = retract(corpus, OBJ, "wrong", TODAY).corpus
+    with pytest.raises(ValueError, match=match):
+        release(corpus, qid, contrib, "ok", TODAY)
+
+
+def test_rejected_contribution_is_hidden_and_not_requeued():
+    contrib = Contribution(A, cand(extra=PHONE))
+    held = run(contrib)
+    out = reject(held.corpus, held.corpus.quarantine[0].id, "real number", TODAY)
+    assert out.corpus.quarantine[0].status == "rejected"
+    assert "#### Q-" not in render_shared(out.corpus)
+    assert not contribute(out.corpus, [contrib], TODAY).changed
+
+
+def test_supersede_retires_the_old_item(tmp_path, catalog):
+    corpus = run(Contribution(A, cand()), Contribution(A, cand("ssrf"))).corpus
+    out = supersede(corpus, "SI-server_side_fetch", OBJ, "folded into a broader lesson", TODAY)
+    old = out.corpus.items["SI-server_side_fetch"]
+    assert old.status == "superseded" and old.note.startswith(f"superseded by {OBJ}")
+    store_page(tmp_path, out.corpus)
+    assert a_context.read_shared_lessons("customer-b", catalog, tmp_path)[0].id == OBJ
+    later = run(Contribution(B, cand("ssrf", confirmations=2)), corpus=out.corpus)
+    assert later.corpus.quarantine[0].reasons == ["contributes_to_superseded_item"]
+    with pytest.raises(KeyError):
+        supersede(out.corpus, OBJ, OBJ, "x", TODAY)
+
+
+def test_review_cli_flow(tmp_path, capsys):
+    scaffold(tmp_path)
+    page = tmp_path / "customers" / "customer-a.md"
+    line = cand(extra=PHONE).line
+    page.write_text(apply_patch(page.read_text(), Patch("customer-a", [Op(10, "CL-idor", line)])))
+    base = ["--memory-dir", str(tmp_path)]
+    assert cli([*base, "update"]) == 0
+    capsys.readouterr()
+    assert cli([*base, "review"]) == 0
+    qid = capsys.readouterr().out.split()[0]
+    assert qid.startswith("Q-")
+    assert cli([*base, "release", "Q-nope", "--note", "x"]) == 1
+    assert "nothing pending" in capsys.readouterr().err
+    assert cli([*base, "release", qid, "--note", "sample number"]) == 0
+    assert "### SI-object_access_authz" in (tmp_path / "shared-intelligence.md").read_text()
+    assert cli([*base, "audit"]) == 0

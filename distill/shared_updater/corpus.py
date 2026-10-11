@@ -26,7 +26,7 @@ class Source(BaseModel):
 class Item(BaseModel):
     id: str
     version: int
-    status: str  # active | retracted | superseded
+    status: str  # active | expired | retracted | superseded (non-active: Deprecated section)
     source_class: str = "swarm-simulation"
     evidence_level: str  # reproduced | verified
     confidence: str  # low | medium | high
@@ -44,7 +44,7 @@ class Quarantined(BaseModel):
     candidate_key: str
     reasons: list[str]
     date: Date
-    status: str = "pending_review"
+    status: str = "pending_review"  # pending_review | released | rejected
 
 
 class ChangeLogEntry(BaseModel):

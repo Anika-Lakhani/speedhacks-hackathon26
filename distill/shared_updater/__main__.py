@@ -4,6 +4,10 @@ uv run python -m distill.shared_updater approve --customer customer-a --class id
 uv run python -m distill.shared_updater update [--dry-run]
 uv run python -m distill.shared_updater retract SI-object_access_authz --reason "..."
 uv run python -m distill.shared_updater rollback 0.2.0
+uv run python -m distill.shared_updater supersede SI-old --by SI-new --reason "..."
+uv run python -m distill.shared_updater review                       # quarantine queue
+uv run python -m distill.shared_updater release Q-1a2b3c4d5e --note "scanner false positive"
+uv run python -m distill.shared_updater reject Q-1a2b3c4d5e --note "real secret; fixed on page"
 uv run python -m distill.shared_updater audit
 """
 
@@ -20,9 +24,13 @@ from distill.shared_updater.update import (
     Contribution,
     Outcome,
     contribute,
+    pending_review,
     read_candidates,
+    reject,
+    release,
     retract,
     rollback,
+    supersede,
 )
 
 
@@ -58,14 +66,18 @@ def cmd_approve(args) -> int:
     return 0
 
 
-def cmd_update(args) -> int:
-    store = Store(args.memory_dir)
+def _contributions(memory_dir: Path) -> list[Contribution]:
     salt = load_salt()
-    contributions = [
+    return [
         Contribution(source_token(page.stem, salt), candidate)
-        for page in sorted((args.memory_dir / "customers").glob("*.md"))
+        for page in sorted((memory_dir / "customers").glob("*.md"))
         for candidate in read_candidates(page.read_text())
     ]
+
+
+def cmd_update(args) -> int:
+    store = Store(args.memory_dir)
+    contributions = _contributions(args.memory_dir)
     corpus = store.load()
     outcome = contribute(corpus, contributions, date.today())
     return _finish(store, render_shared(corpus), outcome, args.dry_run)
@@ -84,6 +96,53 @@ def cmd_rollback(args) -> int:
     corpus = store.load()
     outcome = rollback(corpus, store.snapshot(args.version), date.today())
     return _finish(store, render_shared(corpus), outcome, False)
+
+
+def cmd_supersede(args) -> int:
+    store = Store(args.memory_dir)
+    corpus = store.load()
+    outcome = supersede(corpus, args.item, args.by, args.reason, date.today())
+    return _finish(store, render_shared(corpus), outcome, False)
+
+
+def cmd_review(args) -> int:
+    """List quarantined contributions. Their content stays on the source customer page."""
+    queue = pending_review(Store(args.memory_dir).load())
+    for q in queue:
+        print(
+            f"{q.id}  {q.date}  class={q.weakness_class}  candidate={q.candidate_key}  "
+            f"rules={','.join(q.reasons)}"
+        )
+    print(f"{len(queue)} pending review")
+    return 0
+
+
+def cmd_release(args) -> int:
+    store = Store(args.memory_dir)
+    corpus = store.load()
+    q = next((x for x in pending_review(corpus) if x.id == args.qid), None)
+    if q is None:
+        raise KeyError(f"nothing pending review with id {args.qid}")
+    contrib = next(
+        (
+            c
+            for c in _contributions(args.memory_dir)
+            if c.source == q.source and c.candidate.key == q.candidate_key
+        ),
+        None,
+    )
+    if contrib is None:
+        raise KeyError(f"the customer page no longer has {q.candidate_key}; reject {q.id}")
+    outcome = release(corpus, q.id, contrib, args.note, date.today())
+    return _finish(store, render_shared(corpus), outcome, False)
+
+
+def cmd_reject(args) -> int:
+    store = Store(args.memory_dir)
+    corpus = store.load()
+    return _finish(
+        store, render_shared(corpus), reject(corpus, args.qid, args.note, date.today()), False
+    )
 
 
 def cmd_audit(args) -> int:
@@ -120,11 +179,34 @@ def main(argv=None) -> int:
     rb.add_argument("version")
     rb.set_defaults(fn=cmd_rollback)
 
+    sp = sub.add_parser("supersede", help="replace an active item with another")
+    sp.add_argument("item")
+    sp.add_argument("--by", required=True)
+    sp.add_argument("--reason", required=True)
+    sp.set_defaults(fn=cmd_supersede)
+
+    rv = sub.add_parser("review", help="list quarantined contributions")
+    rv.set_defaults(fn=cmd_review)
+
+    rl = sub.add_parser("release", help="release a quarantined contribution into the corpus")
+    rl.add_argument("qid")
+    rl.add_argument("--note", required=True)
+    rl.set_defaults(fn=cmd_release)
+
+    rj = sub.add_parser("reject", help="reject a quarantined contribution")
+    rj.add_argument("qid")
+    rj.add_argument("--note", required=True)
+    rj.set_defaults(fn=cmd_reject)
+
     au = sub.add_parser("audit", help="privacy audit of shared-intelligence.md")
     au.set_defaults(fn=cmd_audit)
 
     args = p.parse_args(argv)
-    return args.fn(args)
+    try:
+        return args.fn(args)
+    except (KeyError, ValueError) as e:
+        print(f"error: {e.args[0] if e.args else e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

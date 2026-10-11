@@ -38,9 +38,11 @@ Entries are upserted or removed by key; other lines (e.g. the §2 profile) are n
 A finding is `reproduced` when Dev A confirms it and `verified` only after a human approves it
 (`attack.harness approve`, read from `.swarmshield/approvals.json`).
 
-Run it: `uv run python -m distill.customer_analysis --customer customer-a --events
-fixtures/events/customer-a.jsonl --dry-run` (or `--keewano http://localhost:4000` once Dev B's
-read API is live). It prints the patch as a diff and applies it unless `--dry-run`.
+Run it on fixtures: `uv run python -m distill.customer_analysis --customer customer-a --events
+fixtures/events/customer-a.jsonl --dry-run`. Live: `--keewano http://localhost:4000` reads every
+page of the window from Dev B's read API (`docs/read-api.md`), starting at the page's
+`last_distilled` time so repeated runs only distill what is new (`--since`, `--since-revision`
+or `--full` to override). It prints the patch as a diff and applies it unless `--dry-run`.
 
 ## `memory/shared-intelligence.md`
 
@@ -66,8 +68,20 @@ uv run python -m distill.shared_updater approve --customer customer-a --class id
 uv run python -m distill.shared_updater update [--dry-run]   # promote approved §10 candidates
 uv run python -m distill.shared_updater retract <item-id> --reason "..."
 uv run python -m distill.shared_updater rollback <knowledge_version>
+uv run python -m distill.shared_updater supersede <old-id> --by <new-id> --reason "..."
+uv run python -m distill.shared_updater review                # quarantine queue
+uv run python -m distill.shared_updater release <Q-id> --note "..."   # merge after human review
+uv run python -m distill.shared_updater reject <Q-id> --note "..."
 uv run python -m distill.shared_updater audit                 # privacy audit of the shared page
 ```
+
+Item statuses: `active` (`### <id>`, read by the planner), and `expired`, `retracted`,
+`superseded` (`#### <id>` under Deprecated & superseded knowledge). Every `update` first expires
+active items past their `expiry` (90 days after `last_validation`); an expired item comes back
+only when a tenant contributes changed evidence. Retracted and superseded items never come back:
+contributions to them are quarantined. A released contribution goes through the same merge and
+output gates as any other; one that targets a retired item or has no lesson template can't be
+released, only rejected.
 
 - Reads only §10 `CL-*` lines with `sharing: approved` and label `reproduced`/`verified`.
 - Item text comes from per-weakness templates (`lessons.py`), never from customer pages. `idor`
