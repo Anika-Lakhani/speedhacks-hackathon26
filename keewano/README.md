@@ -10,8 +10,11 @@ The per-tenant event store: ingestion, isolation, and the read/query API on port
 | `config.py` | Settings from env (`SWARMSHIELD_STORE`, paths, tenants) |
 | `ingest.py` | Validate, route by `customer_id`, store, log rejections |
 | `rejects.py` | Rejects log (JSONL); `python -m keewano.rejects` to inspect |
-| `api.py` | FastAPI app: `POST /events`, `POST /evidence`, `GET /health` |
+| `api.py` | FastAPI app: `POST /events`, `POST /evidence`, `GET /health`; mounts `read.py` |
+| `read.py` | Read API: `GET /events`, `GET /events/since-revision`, `GET /evidence/{ref}` |
+| `cursor.py` | Signed, tenant- and query-bound pagination cursors |
+| `openapi.py` | `python -m keewano.openapi`: regenerate `docs/openapi.json` |
 | `setup.py` | `python -m keewano.setup`: create per-tenant tables, idempotent |
 | `fixtures.py` | `python -m keewano.fixtures`: regenerate `fixtures/events/*.jsonl` |
 
-Docs: `docs/ingestion-api.md`. Spec: `docs/dev-B-demo-sites-and-event-pipeline.md` §4 and §4a.6.
+Docs: `docs/ingestion-api.md`, `docs/read-api.md`, `docs/openapi.json`. Spec: `docs/dev-B-demo-sites-and-event-pipeline.md` §4 and §4a.6.

@@ -35,7 +35,7 @@ and `fixtures/events/` (nothing yet for M2–M8).
   - **Added beyond §4a:** `POST /evidence` (artifact upload, write-once) and an operator-only
     rejects log (`.data/rejects.jsonl`, not exposed over HTTP). Needs Dev A's acknowledgement.
 
-- [ ] **M3: Read API**
+- [x] **M3: Read API** *(done 2026-10-11; `docs/read-api.md`, `docs/openapi.json`)*
   - **Build:** `GET /events` (required `customer_id`; `since`/`until`/`event_type`/`run_id`;
     default limit 500) with cursor pagination; `GET /events/since-revision`; since-timestamp;
     `GET /evidence/{evidence_ref}` returning `{request, response, flags_snapshot, code_revision}`.
@@ -43,6 +43,9 @@ and `fixtures/events/` (nothing yet for M2–M8).
     tenant-isolation tests (missing `customer_id`, another tenant's `evidence_ref`, injection-shaped
     params, cursor reuse across tenants) all return nothing from other tenants.
   - **Depends on:** M2.
+  - **Decided:** body stays a plain array (Dev A's client), paging via `X-Next-Cursor` /
+    `X-Has-More` headers; max page 1000; `GET /evidence` requires `customer_id` (Dev A's
+    `get_evidence` needs a one-line change); unknown revision → 404.
 
 - [ ] **M3b: Keewano real sink** *(blocked)*
   - **Build:** replace the Keewano stub with the real ingestion path.

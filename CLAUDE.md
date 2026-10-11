@@ -28,6 +28,7 @@ uv sync                          # create .venv, install deps (incl. dev group)
 uv run pytest                    # all tests
 uv run pytest tests/test_events.py tests/test_validate.py   # contract tests only
 uv run pytest tests/test_store.py tests/test_ingest.py      # store and ingestion tests
+uv run pytest tests/test_read.py tests/test_read_isolation.py  # read API + tenant isolation
 uv run ruff check                # lint
 uv run python -m contracts       # regenerate contracts/event.schema.json after editing events.py
 ```
@@ -39,6 +40,7 @@ uv run python -m keewano.setup                                # create per-tenan
 uv run uvicorn keewano.api:create_app --factory --port 4000   # event store API
 uv run python -m keewano.rejects                              # inspect rejected events
 uv run python -m keewano.fixtures                             # regenerate fixtures/events/*.jsonl
+uv run python -m keewano.openapi                              # regenerate docs/openapi.json
 ```
 
 Sites (ports fixed by dev-B §4a.1). These modules arrive in M4–M6; intended entry points:
