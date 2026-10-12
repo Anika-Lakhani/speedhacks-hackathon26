@@ -107,20 +107,38 @@ class DemoWorld:
         generator: ScenarioGenerator | None = None,
         memory_dir: Path = MEMORY_DIR,
         catalog_dir: Path = DEFAULT_CATALOG_DIR,
+        keewano=None,
+        site_factory=None,
     ):
         self._catalog_dir = catalog_dir
         self._memory_dir = memory_dir
         self.catalog: Catalog = load_catalog(catalog_dir)
         self.flags: list[FlagDef] = load_flags()
-        self.keewano = FakeKeewano()
+        # Live mode injects the real Keewano store (HTTP) and real demo sites (HTTP); the
+        # default is the in-process fakes so the dashboard still runs with nothing else up.
+        self.keewano = keewano or FakeKeewano()
+        self._live = keewano is not None
         self.queue = ApprovalQueue(None)  # in-memory; nothing written to disk
         self.generated = GeneratedStore(None)  # in-memory; promotion still writes the catalog
         self._rev: dict[str, int] = {}
-        self.sites: dict[str, FakeSite] = {}
+        self.sites: dict[str, Any] = {}
         for cid in sorted({f.customer_id for f in self.flags}):
-            self.sites[cid] = FakeSite(
-                cid, self.catalog, self._seed_flags(cid), evidence_sink=self.keewano.store_evidence
-            )
+            if site_factory is not None:
+                self.sites[cid] = site_factory(cid)
+            else:
+                self.sites[cid] = FakeSite(
+                    cid, self.catalog, self._seed_flags(cid),
+                    evidence_sink=self.keewano.store_evidence,
+                )
+        if self._live:
+            # Stand in for a "bad deploy": seed the weakness flag ON on the real site so the
+            # first Run has a genuine vulnerability to confirm (best-effort; site may be down).
+            for cid, seed in SEED_VULNERABLE.items():
+                if cid in self.sites:
+                    try:
+                        self.sites[cid].set_flags(seed)
+                    except Exception:
+                        pass
 
         self._planner_override = planner
         self._generator_override = generator
@@ -238,8 +256,18 @@ class DemoWorld:
             "run_id": job.run_id,
             "verdict": verdict,
             "fixed": verdict == "not_reproduced",
-            "code_revision": self.sites[customer_id].code_revision,
+            "code_revision": self._revision(customer_id),
         }
+
+    def _revision(self, customer_id: str) -> str | None:
+        site = self.sites[customer_id]
+        rev = getattr(site, "code_revision", None)
+        if rev is not None:
+            return rev
+        try:
+            return site.meta().get("code_revision")
+        except Exception:
+            return None
 
     # -- flags ---------------------------------------------------------------------------
 
@@ -253,7 +281,8 @@ class DemoWorld:
         return self.data.flags(customer_id)
 
     def reset_demo(self, customer_id: str) -> dict[str, Any]:
-        self.sites[customer_id].flags = self._seed_flags(customer_id)
+        # Go through set_flags so it works for both FakeSite and the live HTTP SiteClient.
+        self.sites[customer_id].set_flags(self._seed_flags(customer_id))
         self._bump_revision(customer_id)
         return self.data.flags(customer_id)
 
@@ -321,7 +350,7 @@ class DemoWorld:
                 run_id=job.run_id,
                 memory_dir=self._memory_dir,
             )
-            events = self.keewano.get_slice(job.customer_id, run_id=job.run_id, limit=100_000)
+            events = self.keewano.get_slice(job.customer_id, run_id=job.run_id, limit=1000)
             job.distill = self._distill(job.customer_id, events)
             job.status = "done"
         except Exception as e:  # keep a runaway/unexpected failure out of the HTTP thread
@@ -382,6 +411,9 @@ class DemoWorld:
         ]
 
     def _bump_revision(self, customer_id: str) -> None:
+        # Live HTTP sites bump their own revision on PUT /__flags; only the fakes need this.
+        if self._live:
+            return
         self._rev[customer_id] = self._rev.get(customer_id, 1) + 1
         self.sites[customer_id].code_revision = f"fake-rev-{self._rev[customer_id]}"
 

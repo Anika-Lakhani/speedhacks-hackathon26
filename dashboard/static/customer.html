@@ -1,251 +1,208 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Customer · SwarmShield</title><link rel="stylesheet" href="/static/style.css"></head>
+<title>SwarmShield · live demo</title><link rel="stylesheet" href="/static/style.css">
+<style>
+  main{max-width:900px}
+  .hero{text-align:center;padding:26px 18px 10px}
+  .hero h1{font-size:26px;margin:0 0 6px}
+  .sub{color:var(--muted);margin:0 0 18px}
+  .big{font-size:18px;padding:14px 28px;border-radius:10px;font-weight:600}
+  .big:disabled{opacity:.55}
+  .chip{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;border:1px solid var(--line);background:var(--card)}
+  .steps{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:14px 0 0}
+  .step{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);padding:6px 12px;border:1px solid var(--line);border-radius:99px;background:var(--card)}
+  .step.active{color:var(--fg);border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
+  .step.done{color:var(--green);border-color:var(--green)}
+  .dot{width:9px;height:9px;border-radius:99px;background:currentColor;opacity:.5}
+  .step.active .dot{animation:pulse 1s infinite}
+  @keyframes pulse{50%{opacity:.2}}
+  .section-title{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:28px 0 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .section-title .note{text-transform:none;letter-spacing:0}
+  .finding{border:1px solid var(--line);border-left:4px solid var(--red);border-radius:10px;padding:16px;margin-bottom:12px;background:var(--card)}
+  .finding.fixed{border-left-color:var(--green)}
+  .finding h3{margin:0 0 4px;font-size:17px}
+  .finding .why{color:var(--muted);margin:4px 0 12px}
+  .patch{background:var(--bg);border:1px dashed var(--line);border-radius:8px;padding:12px;margin:10px 0}
+  .patch .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:4px}
+  .sev{font-size:11px;font-weight:700;text-transform:uppercase;padding:2px 8px;border-radius:99px;color:#fff;vertical-align:2px}
+  .sev.critical{background:#b91c1c}.sev.high{background:var(--red)}.sev.medium{background:var(--amber)}.sev.low{background:var(--grey)}
+  .allclear{text-align:center;padding:22px;border:1px solid var(--green);border-radius:10px;background:color-mix(in srgb,var(--green) 8%,var(--card));color:var(--green);font-weight:600}
+  .ok{color:var(--green);font-weight:600}
+  .toast{text-align:center;color:var(--muted);min-height:20px;margin-top:10px}
+  .mdcard{border:1px solid var(--line);border-radius:10px;padding:4px 18px;background:var(--card)}
+  .mdcard.shared{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,var(--card)),var(--card))}
+  .mdcard.flash{animation:flash 1.4s ease}
+  @keyframes flash{0%{box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 40%,transparent)}100%{box-shadow:none}}
+  .md h1{font-size:19px}.md h2{font-size:15px;margin-top:14px}.md h3{font-size:14px}
+  .md table{font-size:13px}.md{line-height:1.55}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:99px;animation:sp .7s linear infinite;vertical-align:-2px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style></head>
 <body>
-<header><a href="/">← All customers</a><h1 id="title"></h1><span id="meta" class="muted"></span>
-<span id="status" class="muted"></span></header>
+<header><a href="/">← All customers</a><h1>SwarmShield</h1><span id="meta" class="muted"></span></header>
 <main>
-<div id="banner" class="banner" hidden></div>
-<div class="grid">
-  <section class="card wide" id="runform" hidden>
-    <h2>Run a test cycle</h2>
-    <div class="form">
-      <label>Objective
-        <select id="obj-preset">
-          <option>Test recently changed surfaces for regressions</option>
-          <option>Full sweep of known weaknesses</option>
-          <option>Focus on authentication and access control</option>
-          <option value="__custom">Custom…</option>
-        </select>
-        <input id="obj-text" type="text" placeholder="custom objective" hidden>
-      </label>
-      <label>What changed? (paths, comma-separated)
-        <input id="changed" type="text" placeholder="/orders, /login"></label>
-      <label>Diff summary
-        <textarea id="diff" rows="2" placeholder="e.g. refactored the order lookup"></textarea></label>
-      <label>Code to analyze (optional)
-        <textarea id="code" rows="4" placeholder="paste source to focus the planner/generator"></textarea>
-        <span class="muted">Credentials are masked before Gemini sees them.</span></label>
-      <label>Let Gemini invent new tests: <output id="gen-out">0</output>
-        <input id="gen" type="range" min="0" max="5" value="0"></label>
-      <details>
-        <summary>Advanced</summary>
-        <label><input type="checkbox" id="offline"> Offline mode (deterministic, no Gemini)</label>
-        <label><input type="checkbox" id="auto" checked> Auto-approve confirmed findings</label>
-        <label>Max scenarios <input id="maxscn" type="number" value="12" min="1" max="50"></label>
-        <label>Max runtime (s) <input id="maxrt" type="number" value="120" min="1" max="600"></label>
-      </details>
-      <div><button id="run" data-act="run">Run tests</button>
-        <span id="progress" class="muted"></span></div>
+  <div class="hero">
+    <h1 id="title">customer-a</h1>
+    <p class="sub"><span id="apptype" class="chip"></span> &nbsp; <span id="rev" class="chip"></span></p>
+    <button id="run" class="big">▶&nbsp; Run security scan</button>
+    <div class="steps" id="steps" hidden>
+      <div class="step" data-s="plan"><span class="dot"></span>Analyzing &amp; planning</div>
+      <div class="step" data-s="attack"><span class="dot"></span>Attacking (safely)</div>
+      <div class="step" data-s="verify"><span class="dot"></span>Verifying findings</div>
     </div>
-  </section>
-  <section class="card" id="flags"><h2>Flags</h2></section>
-  <section class="card" id="vulns"><h2>Vulnerabilities</h2></section>
-  <section class="card wide" id="plan" hidden><h2>Plan</h2></section>
-  <section class="card wide" id="verdicts" hidden><h2>Verdicts</h2></section>
-  <section class="card wide" id="generated" hidden><h2>Generated tests (review)</h2></section>
-  <section class="card wide" id="approvals" hidden><h2>Approvals</h2></section>
-  <section class="card wide" id="runs"><h2>Runs</h2></section>
-  <section class="card wide md" id="memory"></section>
-</div></main>
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <div id="results" hidden>
+    <div class="section-title">What the agents found</div>
+    <div id="findings"></div>
+  </div>
+
+  <div class="section-title">Customer memory
+    <span class="note muted">— <code>customer-a.md</code>, written live from the event stream</span></div>
+  <div class="mdcard md" id="memory"></div>
+
+  <div class="section-title">Shared intelligence
+    <span id="kv" class="chip"></span>
+    <span class="note muted">— <code>shared-intelligence.md</code>, the layer that learns across every customer</span></div>
+  <div class="mdcard shared md" id="sharedmd"></div>
+</main>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 <script type="module">
-import { el, api, post, pill, sourceBadge, table, renderMarkdown } from "/static/common.js";
+import { el, api, post, renderMarkdown } from "/static/common.js";
 const id = location.pathname.split("/").pop(), base = `/api/customer/${id}`;
 const $ = x => document.getElementById(x);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 $("title").textContent = id;
 document.title = `${id} · SwarmShield`;
 
-const canWrite = (await api("/api/features").catch(() => ({}))).write === true;
-let busy = false;
-const setStatus = t => { $("status").textContent = t; };
-const setButtons = d => document.querySelectorAll("button[data-act]").forEach(b => b.disabled = d);
-const show = (secId, on = true) => { $(secId).hidden = !on; };
+const FRIENDLY = {
+  "SCN-IDOR-001": { name: "Customers can read other customers' orders",
+    why: "The order page trusts an ID from the URL without checking who owns it, so one shopper can open someone else's order." },
+  "SCN-RATE-001": { name: "Login has no rate limiting",
+    why: "Failed logins aren't throttled, so an attacker can guess passwords as fast as they like." },
+  "SCN-RATE-002": { name: "One-time-code check has no rate limiting",
+    why: "Verification codes can be brute-forced because guesses aren't limited." },
+  "SCN-RESET-001": { name: "Password reset accepts a guessable token",
+    why: "The reset flow accepts weak tokens, letting an attacker take over an account." },
+};
 
-// ---- run form -------------------------------------------------------------------------
-if (canWrite) {
-  show("runform");
-  $("obj-preset").onchange = e => { $("obj-text").hidden = e.target.value !== "__custom"; };
-  $("gen").oninput = e => { $("gen-out").textContent = e.target.value; };
-  $("run").onclick = doRun;
+let busy = false;
+const setBusy = b => { busy = b; $("run").disabled = b; };
+const toast = (t, spin=false) => { $("toast").replaceChildren(); if (spin) $("toast").append(el("span",{class:"spin"})," "); if (t) $("toast").append(document.createTextNode(t)); };
+
+const ORDER = ["plan","attack","verify"];
+const STAGE_TO_STEP = { planning: "plan", probing: "attack", done: "verify", error: "verify" };
+function setStep(key, status) {
+  for (const s of document.querySelectorAll(".step")) {
+    const si = ORDER.indexOf(s.dataset.s), ki = ORDER.indexOf(key);
+    s.classList.toggle("active", s.dataset.s === key && status !== "done");
+    s.classList.toggle("done", si < ki || status === "done");
+  }
 }
-function options() {
-  const preset = $("obj-preset").value;
-  return {
-    objective: preset === "__custom" ? $("obj-text").value : preset,
-    changed_surfaces: $("changed").value.split(",").map(s => s.trim()).filter(Boolean),
-    diff_summary: $("diff").value,
-    code_context: $("code").value.trim() ? { "pasted.txt": $("code").value } : {},
-    generate_max: Number($("gen").value),
-    offline: $("offline").checked,
-    auto_approve: $("auto").checked,
-    max_scenarios: Number($("maxscn").value),
-    max_runtime_s: Number($("maxrt").value),
-  };
-}
+
+// ---- run flow (mechanics abstracted away: offline + auto-approve, one click) ----
+$("run").onclick = doRun;
 async function doRun() {
   if (busy) return;
-  busy = true; setButtons(true); setStatus(""); $("progress").textContent = "starting…";
+  setBusy(true); $("steps").hidden = false; setStep("plan"); toast("Starting the swarm…", true);
   try {
-    const { run_id } = await post(`${base}/run`, options());
+    const { run_id } = await post(`${base}/run`, { offline: true, auto_approve: true,
+      objective: "Test recently changed surfaces for regressions" });
     await pollRun(run_id);
-  } catch (e) { $("progress").textContent = `run failed: ${e.message}`; }
-  finally { busy = false; setButtons(false); }
+  } catch (e) { toast(`Scan failed: ${e.message}`); }
+  finally { setBusy(false); }
 }
 async function pollRun(run_id) {
   for (;;) {
     const st = await api(`/api/run/${run_id}`);
-    const prog = st.planned == null ? "" : ` · ${st.probed}/${st.planned} probed`;
-    $("progress").textContent = `${st.stage}${prog}`;
-    if (st.status === "done" || st.status === "error") { renderReport(st); await refresh(); return; }
-    await sleep(1000);
+    setStep(STAGE_TO_STEP[st.stage] || "plan");
+    if (st.stage === "probing" && st.planned)
+      toast(`Running ${st.probed}/${st.planned} attack scenarios against the live app…`, true);
+    else if (st.stage === "planning") toast("Reading the app, diff and past findings to plan attacks…", true);
+    if (st.status === "done" || st.status === "error") {
+      setStep("verify", "done");
+      toast(st.status === "error" ? `Error: ${st.error}` : "Scan complete — memory pages updated below.");
+      await showResults(true); return;
+    }
+    await sleep(900);
   }
 }
 
-// ---- report rendering -----------------------------------------------------------------
-function renderBanner(report, extra) {
-  const msgs = [];
-  if (extra) msgs.push(extra);
-  if (report?.plan?.degraded) msgs.push(`Planner degraded to offline fallback: ${report.plan.error || "unknown error"}`);
-  if (report?.generation?.degraded) msgs.push(`Generator failed: ${report.generation.error || "unknown error"}`);
-  const b = $("banner");
-  b.hidden = msgs.length === 0;
-  b.textContent = msgs.join("\n");
-}
-const PLAIN = {
-  inconclusive: "the test ran but the response didn't look like what was predicted",
-  blocked: "the test could not run (precondition unmet or target out of scope)",
-};
-function renderReport(st) {
-  const report = st.report;
-  renderBanner(report, st.status === "error" ? `Run errored: ${st.error}` : null);
-  if (!report) { show("plan", false); show("verdicts", false); return; }
-  const genIds = new Set((report.generation?.accepted || []).map(a => a.id));
-  show("plan");
-  $("plan").replaceChildren(el("h2", {}, "Plan"), table([
-    { label: "Scenario", render: s => s.scenario_id },
-    { label: "Source", render: s => pill(genIds.has(s.scenario_id) ? "generated" : "curated") },
-    { label: "Priority", render: s => s.priority },
-    { label: "Rationale", render: s => s.rationale },
-  ], report.plan.steps, "No scenarios planned."));
-  show("verdicts");
-  $("verdicts").replaceChildren(el("h2", {}, "Verdicts"), table([
-    { label: "Scenario", render: o => o.scenario_id },
-    { label: "Verdict", render: o => pill(o.verdict, o.verdict) },
-    { label: "Confidence", render: o => o.confidence?.toFixed?.(2) ?? "" },
-    { label: "Evidence", render: o => o.evidence_label },
-    { label: "Notes", render: o => el("span", { title: o.notes || "" }, PLAIN[o.verdict] || o.notes || "") },
-  ], report.outcomes, "No verdicts."), footer(report));
-}
-function footer(report) {
-  const u = report.budget_usage || {};
-  const parts = [`stop: ${report.stop_reason}`,
-    `spend $${u.spend_usd ?? 0}`, `${u.runtime_s ?? 0}s`, `${u.tool_calls ?? 0} calls`];
-  if (report.warnings?.length) parts.push(`warnings: ${report.warnings.join("; ")}`);
-  return el("div", { class: "footer" }, parts.join("  ·  "));
-}
-
-// ---- review gates ---------------------------------------------------------------------
-async function loadGates() {
-  if (!canWrite) return;
-  const [gen, appr] = await Promise.all([api(`${base}/generated`), api(`${base}/approvals`)]);
-  const genRows = gen.generated;
-  show("generated", genRows.length > 0);
-  if (genRows.length) {
-    $("generated").replaceChildren(el("h2", {}, "Generated tests (review)"), table([
-      { label: "ID", render: g => g.id },
-      { label: "Title", render: g => g.title },
-      { label: "Runs", render: g => `${g.runs} (${g.last_verdict ?? "-"})` },
-      { label: "Status", render: g => pill(g.status) },
-      { label: "", render: g => g.status === "pending"
-        ? el("span", {},
-            gateBtn("Promote", g.runs === 0, () => gate(`${base}/generated/promote`, g.id)),
-            " ", gateBtn("Reject", false, () => gate(`${base}/generated/reject`, g.id)))
-        : "" },
-    ], genRows, ""));
+// ---- results ----
+async function showResults(flash) {
+  $("results").hidden = false;
+  const [vulns] = await Promise.all([api(`${base}/vulnerabilities`), loadMeta(), loadMds(flash)]);
+  const box = $("findings"); box.replaceChildren();
+  if (!vulns.vulnerabilities.length) {
+    box.append(el("div", { class: "allclear" }, "✓ No open vulnerabilities — this deploy is clean."));
+    return;
   }
-  const pend = appr.approvals;
-  show("approvals", pend.length > 0);
-  if (pend.length) {
-    $("approvals").replaceChildren(el("h2", {}, "Approvals"), table([
-      { label: "Scenario", render: a => a.scenario_id },
-      { label: "Run", render: a => a.run_id },
-      { label: "", render: a => gateBtn("Approve", false, () =>
-          act(() => post(`${base}/approvals/approve`, { run_id: a.run_id, scenario_id: a.scenario_id }))) },
-    ], pend, ""));
-  }
+  for (const v of vulns.vulnerabilities) box.append(findingCard(v));
 }
-function gateBtn(label, disabled, fn) {
-  return el("button", { class: "mini", "data-act": "gate", disabled, onclick: fn }, label);
+function findingCard(v) {
+  const f = FRIENDLY[v.scenario_id] || { name: v.scenario_id, why: v.invariant || "" };
+  const sev = (v.severity || "high").toLowerCase();
+  const card = el("div", { class: "finding" },
+    el("h3", {}, f.name, " ", el("span", { class: `sev ${sev}` }, sev)),
+    el("div", { class: "why" }, f.why),
+    el("div", { class: "patch" },
+      el("div", { class: "lbl" }, "Suggested patch"),
+      el("div", {}, "Enforce ownership/authorization on this endpoint. SwarmShield will disable the ",
+        el("code", {}, v.flag || "weakness"), " weakness, redeploy, and re-verify automatically.")),
+    el("div", {}, el("button", { onclick: () => fix(v, card) }, "✓ Approve & apply fix")));
+  return card;
 }
-function gate(path, scenario_id) { return act(() => post(path, { scenario_id })); }
-async function act(fn) {
+async function fix(v, card) {
   if (busy) return;
-  busy = true; setButtons(true);
-  try { await fn(); await refresh(); }
-  catch (e) { setStatus(`failed: ${e.message}`); }
-  finally { busy = false; setButtons(false); }
+  setBusy(true);
+  const btn = card.querySelector("button"); btn.disabled = true; btn.textContent = "Applying & re-verifying…";
+  try {
+    const r = await post(`${base}/fix`, { scenario_id: v.scenario_id });
+    if (r.fixed) {
+      card.classList.add("fixed");
+      card.querySelector(".patch").replaceChildren(
+        el("div", { class: "lbl" }, "Applied & verified"),
+        el("div", {}, "Disabled ", el("code", {}, r.flag), " and redeployed as ", el("code", {}, r.code_revision),
+          ". Re-attack verdict: ", el("span", { class: "ok" }, "not reproduced ✓")));
+      btn.remove();
+      const sevEl = card.querySelector("h3 .sev");
+      if (sevEl) sevEl.replaceWith(el("span", { class: "sev low" }, "fixed"));
+      toast("Fixed and verified. Lesson shared to the intelligence layer below.");
+    } else {
+      btn.disabled = false; btn.textContent = "✓ Approve & apply fix";
+      toast(`Fix did not hold (verdict: ${r.verdict}).`);
+    }
+    await Promise.all([loadMeta(), loadMds(true)]);
+  } catch (e) { toast(`Fix failed: ${e.message}`); btn.disabled = false; btn.textContent = "✓ Approve & apply fix"; }
+  finally { setBusy(false); }
 }
 
-// ---- flags, vulns, runs (ambient) -----------------------------------------------------
-function fill(sectionId, heading, source, note, ...content) {
-  const s = $(sectionId);
-  s.classList.toggle("ph", source !== "live");
-  s.replaceChildren(el("h2", {}, heading, " ", sourceBadge(source, note)), ...content);
+// ---- the markdown pages, front and center ----
+async function loadMeta() {
+  const f = await api(`${base}/flags`);
+  $("rev").textContent = `revision ${f.code_revision ?? "n/a"}`;
 }
-function flagState(f) {
-  if (!canWrite) return el("span", { class: f.on ? "on" : "off" }, f.on ? "ON" : "off");
-  return el("button", { class: `mini ${f.on ? "on" : "off"}`, "data-act": "flag",
-    onclick: () => act(() => fetch(`${base}/flags`, { method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ flags: { [f.flag]: !f.on } }) }).then(r => { if (!r.ok) throw new Error(r.status); })) },
-    f.on ? "ON" : "off");
+let lastShared = null;
+async function loadMds(flash) {
+  const [m, s] = await Promise.all([api(`${base}/memory`), api(`/api/shared`)]);
+  renderMarkdown($("memory"), m.markdown || "_empty_");
+  renderMarkdown($("sharedmd"), s.markdown || "_empty_");
+  const kv = (s.markdown.match(/knowledge_version[^0-9]*([0-9.]+)/i) || [])[1];
+  $("kv").textContent = kv ? `v${kv}` : "";
+  if (flash && s.markdown !== lastShared) {
+    $("sharedmd").classList.remove("flash"); void $("sharedmd").offsetWidth; $("sharedmd").classList.add("flash");
+  }
+  lastShared = s.markdown;
 }
-function fixButton(v) {
-  return el("button", { class: "mini", "data-act": "fix", onclick: () => act(async () => {
-    const r = await post(`${base}/fix`, { scenario_id: v.scenario_id });
-    setStatus(r.fixed
-      ? `fixed ${v.scenario_id}: disabled ${r.flag} → ${r.verdict} @ ${r.code_revision}`
-      : `fix did not hold for ${v.scenario_id}: ${r.verdict}`);
-  }) }, "Fix");
-}
-async function refresh() {
-  const [flags, vulns, runs] = await Promise.all([api(`${base}/flags`), api(`${base}/vulnerabilities`), api(`${base}/runs`)]);
-  $("meta").textContent = `revision: ${flags.code_revision ?? "n/a"}`;
-  const flagHead = [el("h2", {}, "Flags ", sourceBadge(flags.source))];
-  if (canWrite) flagHead.push(" ", el("button", { class: "mini", "data-act": "reset",
-    onclick: () => act(() => post(`${base}/reset`)) }, "Reset demo"));
-  $("flags").classList.toggle("ph", flags.source !== "live");
-  $("flags").replaceChildren(...flagHead, table([
-    { label: "Flag", render: f => f.flag },
-    { label: "State", render: flagState },
-    { label: "Scenarios", render: f => f.scenario_ids.join(", ") },
-  ], flags.flags, "No flags registered."));
-  const vulnCols = [
-    { label: "Scenario", render: v => v.scenario_id },
-    { label: "Flag", render: v => v.flag ?? "" },
-    { label: "Run", render: v => v.run_id },
-    { label: "Evidence", render: v => v.evidence_ref ?? "" },
-  ];
-  if (canWrite) vulnCols.push({ label: "Action", render: v => fixButton(v) });
-  fill("vulns", "Vulnerabilities", vulns.source, vulns.note, table(vulnCols,
-    vulns.vulnerabilities, vulns.source === "live" ? "No confirmed vulnerabilities." : "Waiting for the event store."));
-  fill("runs", "Runs", runs.source, runs.note, table([
-    { label: "Run", render: r => r.run_id },
-    { label: "Started", render: r => r.started },
-    { label: "Status", render: r => pill(r.status) },
-    { label: "Verdicts", render: r => Object.entries(r.verdict_counts).map(([v, n]) => pill(`${v} ${n}`, v)) },
-  ], runs.runs, runs.source === "live" ? "No runs yet." : "Waiting for the event store."));
-  await loadGates();
-}
-async function loadMemory() {
-  const m = await api(`${base}/memory`), s = $("memory");
-  s.classList.toggle("ph", m.source !== "live");
-  const body = el("div"); renderMarkdown(body, m.markdown);
-  s.replaceChildren(el("h2", {}, `Memory (${id}.md) `, sourceBadge(m.source)), body);
-}
-await Promise.all([refresh(), loadMemory()]);
-setInterval(() => { if (!busy) refresh().catch(() => {}); }, 2000);
+
+// ---- init ----
+(async () => {
+  const cs = await api("/api/customers").catch(() => []);
+  const me = cs.find(c => c.customer_id === id);
+  $("apptype").textContent = me?.app_type || "customer";
+  await Promise.all([loadMeta(), loadMds(false)]);
+})();
 </script></body></html>
