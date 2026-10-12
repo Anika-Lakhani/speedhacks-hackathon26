@@ -22,6 +22,10 @@ Built at **SpeedHacks** · SF Tech Week · October 11, 2026
 
 [Quickstart](#-quickstart) · [How it works](#-how-it-works) · [Repo map](#-repo-map) · [Safety model](#-safety-model) · [Status](#-status)
 
+### 📄 Judges: [**open the pitch deck (PDF)**](https://github.com/Anika-Lakhani/speedhacks-hackathon26/raw/feat/ato-response/SwarmShield-Pitch.pdf)
+
+<sub>Or [view it on GitHub](https://github.com/Anika-Lakhani/speedhacks-hackathon26/blob/feat/ato-response/SwarmShield-Pitch.pdf) · 8 slides</sub>
+
 </div>
 
 ---
