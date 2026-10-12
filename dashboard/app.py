@@ -165,3 +165,31 @@ def create_demo_app() -> FastAPI:
     from dashboard.demo import DemoWorld
 
     return create_app(world=DemoWorld())
+
+
+def create_live_app() -> FastAPI:
+    """Full loop against the REAL Keewano store and REAL demo sites, both over HTTP.
+
+        uv run python -m keewano.setup
+        uv run uvicorn keewano.api:create_app --factory --port 4000
+        SWARMSHIELD_STORE_URL=http://localhost:4000 uv run uvicorn \\
+            sites.customer_a.app:create_app --factory --port 3001
+        SWARMSHIELD_SHARE_MODE=auto uv run --env-file .env uvicorn \\
+            dashboard.app:create_live_app --factory --port 8000
+    """
+    import os
+
+    from attack.clients.keewano import KeewanoClient
+    from attack.clients.site import SiteClient
+    from dashboard.data import _site_url
+    from dashboard.demo import DemoWorld
+
+    keewano = KeewanoClient(
+        os.environ.get("DASHBOARD_KEEWANO_URL", "http://localhost:4000"), timeout=5.0
+    )
+    return create_app(
+        world=DemoWorld(
+            keewano=keewano,
+            site_factory=lambda cid: SiteClient(_site_url(cid), timeout=5.0),
+        )
+    )

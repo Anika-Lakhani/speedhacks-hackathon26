@@ -14,8 +14,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from attack.catalog import load_catalog, load_flags
+from attack.clients.fakes import PROBE_HEADER, RUN_HEADER, FakeSite
 from sites.common.emitter import EventEmitter, http_sender
 from sites.customer_a import config
 from sites.customer_a.seed import Order, User, build_store, check_password, hash_password
@@ -63,11 +66,38 @@ def create_app(emitter: EventEmitter | None = None, code_revision: str | None = 
     app.state.store = store
     app.state.reset_outbox = reset_tokens  # tests read this instead of an inbox
 
+    # --- vulnerability flags + probe handling (SAFETY RULE: synthetic fake-data signal only) --
+    # A marked probe (X-SwarmShield-Probe) never touches the real routes below; it is served a
+    # synthetic "vulnerable/secure" response derived from this site's flags and Dev A's curated
+    # catalog. This is the proven FakeSite responder, so the harness's judge matches exactly.
+    _registry = load_flags()
+    _seed = {f.flag: f.default for f in _registry if f.customer_id == config.CUSTOMER_ID}
+    probe_site = FakeSite(config.CUSTOMER_ID, load_catalog(), flags=_seed, code_revision=revision)
+    app.state.probe_site = probe_site
+
     @app.middleware("http")
-    async def revision_header(request: Request, call_next):
-        response = await call_next(request)
-        response.headers["X-Code-Revision"] = revision
-        return response
+    async def probe_interceptor(request: Request, call_next):
+        marker = request.headers.get(PROBE_HEADER)
+        if not marker:
+            response = await call_next(request)
+            response.headers["X-Code-Revision"] = probe_site.code_revision
+            return response
+        body = None
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            try:
+                body = await request.json()
+            except Exception:
+                body = None
+        resp = probe_site.probe(
+            request.method,
+            request.url.path,
+            {PROBE_HEADER: marker, RUN_HEADER: request.headers.get(RUN_HEADER, "")},
+            query=dict(request.query_params) or None,
+            json=body or None,
+        )
+        headers = {k: str(v) for k, v in resp.headers.items()}
+        headers["X-Code-Revision"] = probe_site.code_revision
+        return JSONResponse(content=resp.body, status_code=resp.status, headers=headers)
 
     def emit(
         request: Request,
@@ -119,8 +149,24 @@ def create_app(emitter: EventEmitter | None = None, code_revision: str | None = 
 
     @app.get("/__meta")
     def meta():
-        # dev-B §4a.1. Flags arrive in M5.
-        return {"customer_id": config.CUSTOMER_ID, "code_revision": revision, "flags": {}}
+        # dev-B §4a.1: current code revision and live vulnerability-flag ground truth.
+        return {
+            "customer_id": config.CUSTOMER_ID,
+            "code_revision": probe_site.code_revision,
+            "flags": dict(probe_site.flags),
+        }
+
+    @app.put("/__flags")
+    def set_flags(flags: dict[str, bool]):
+        """Toggle vulnerability flags; a change bumps the code revision (simulated redeploy)."""
+        known = {f.flag for f in _registry if f.customer_id == config.CUSTOMER_ID}
+        updates = {k: bool(v) for k, v in flags.items() if k in known}
+        if not updates:
+            raise HTTPException(400, f"no known flag in {sorted(flags)}")
+        probe_site.flags.update(updates)
+        base, _, n = probe_site.code_revision.rpartition(".")
+        probe_site.code_revision = f"{base or revision}.{(int(n) + 1) if n.isdigit() else 1}"
+        return meta()
 
     @app.get("/products")
     def products():

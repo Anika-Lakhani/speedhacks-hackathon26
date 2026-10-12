@@ -1,0 +1,114 @@
+{
+  "knowledge_version": "0.5.0",
+  "items": {
+    "SI-object_access_authz": {
+      "id": "SI-object_access_authz",
+      "version": 1,
+      "status": "active",
+      "source_class": "swarm-simulation",
+      "evidence_level": "reproduced",
+      "confidence": "low",
+      "applicability": [
+        "idor",
+        "bola"
+      ],
+      "last_validation": "2026-10-11",
+      "expiry": "2027-01-09",
+      "sources": {
+        "src-6f9e3a4ca150": {
+          "label": "verified",
+          "confirmations": 1
+        }
+      },
+      "note": ""
+    },
+    "SI-server_side_fetch": {
+      "id": "SI-server_side_fetch",
+      "version": 2,
+      "status": "active",
+      "source_class": "swarm-simulation",
+      "evidence_level": "verified",
+      "confidence": "medium",
+      "applicability": [
+        "ssrf"
+      ],
+      "last_validation": "2026-10-11",
+      "expiry": "2027-01-09",
+      "sources": {
+        "src-6f9e3a4ca150": {
+          "label": "verified",
+          "confirmations": 2
+        }
+      },
+      "note": ""
+    },
+    "SI-query_injection": {
+      "id": "SI-query_injection",
+      "version": 2,
+      "status": "active",
+      "source_class": "swarm-simulation",
+      "evidence_level": "verified",
+      "confidence": "medium",
+      "applicability": [
+        "injection"
+      ],
+      "last_validation": "2026-10-11",
+      "expiry": "2027-01-09",
+      "sources": {
+        "src-02f9482f98e3": {
+          "label": "verified",
+          "confirmations": 2
+        }
+      },
+      "note": ""
+    },
+    "SI-output_encoding": {
+      "id": "SI-output_encoding",
+      "version": 1,
+      "status": "active",
+      "source_class": "swarm-simulation",
+      "evidence_level": "reproduced",
+      "confidence": "low",
+      "applicability": [
+        "output_encoding"
+      ],
+      "last_validation": "2026-10-11",
+      "expiry": "2027-01-09",
+      "sources": {
+        "src-02f9482f98e3": {
+          "label": "verified",
+          "confirmations": 1
+        }
+      },
+      "note": ""
+    }
+  },
+  "quarantine": [],
+  "changelog": [
+    {
+      "version": "0.1.0",
+      "date": null,
+      "summary": "corpus created (empty)"
+    },
+    {
+      "version": "0.2.0",
+      "date": "2026-10-11",
+      "summary": "add SI-object_access_authz; add SI-server_side_fetch"
+    },
+    {
+      "version": "0.3.0",
+      "date": "2026-10-11",
+      "summary": "merge SI-server_side_fetch"
+    },
+    {
+      "version": "0.4.0",
+      "date": "2026-10-11",
+      "summary": "add SI-query_injection; add SI-output_encoding"
+    },
+    {
+      "version": "0.5.0",
+      "date": "2026-10-11",
+      "summary": "merge SI-query_injection"
+    }
+  ]
+}
